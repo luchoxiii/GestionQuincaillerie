@@ -1,0 +1,5 @@
+﻿Código SKU,Nombre del Producto,Código de Barras,Categoría / Rubro,Precio Costo ($),Margen (%),Precio Venta ($),Alícuota IVA (%),Stock Actual,Stock Mínimo,Unidad
+CEM-001,Cemento Loma Negra Portland 50kg,7791234567890,Materiales de Construcción,7500,35,10125,21,120,20,BOLSA
+AMO-002,"Amoladora Angular DeWalt 4 1/2"" 820W",7799876543210,Herramientas Eléctricas,55000,40,77000,21,8,3,UNID
+HIERRO-003,Varilla de Hierro Aletado 8mm x 12m,7795551234567,Hierros y Perfiles,3800,30,4940,21,250,50,BARRA
+PIN-004,Pintura Látex Interior Alba 20 Lts Blanco,7793334445556,Pinturas y Accesorios,48000,45,69600,21,15,4,BALDE

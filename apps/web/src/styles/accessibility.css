@@ -1,0 +1,243 @@
+/* ==========================================================================
+   Ferretería ERP - Estilos Universales de Accesibilidad (WCAG 2.1 AA / AAA)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Tamaño de Fuente Escalable
+   -------------------------------------------------------------------------- */
+html.a11y-font-large {
+  font-size: 115% !important;
+}
+
+html.a11y-font-xlarge {
+  font-size: 130% !important;
+}
+
+html.a11y-font-huge {
+  font-size: 150% !important;
+}
+
+/* --------------------------------------------------------------------------
+   2. Tipografía Optimizada para Dislexia y Dificultades de Lectura
+   -------------------------------------------------------------------------- */
+html.a11y-dyslexic,
+html.a11y-dyslexic body,
+html.a11y-dyslexic input,
+html.a11y-dyslexic button,
+html.a11y-dyslexic select,
+html.a11y-dyslexic textarea {
+  font-family: 'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+  letter-spacing: 0.08em !important;
+  word-spacing: 0.16em !important;
+  line-height: 1.8 !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. Modos de Alto Contraste
+   -------------------------------------------------------------------------- */
+
+/* A. Amarillo sobre Negro (Estándar de Oro WCAG AAA para Baja Visión) */
+html.a11y-hc-yellow-black,
+html.a11y-hc-yellow-black body {
+  background-color: #000000 !important;
+  color: #ffff00 !important;
+}
+
+html.a11y-hc-yellow-black * {
+  border-color: #ffff00 !important;
+}
+
+html.a11y-hc-yellow-black div,
+html.a11y-hc-yellow-black section,
+html.a11y-hc-yellow-black header,
+html.a11y-hc-yellow-black aside,
+html.a11y-hc-yellow-black main,
+html.a11y-hc-yellow-black footer,
+html.a11y-hc-yellow-black table,
+html.a11y-hc-yellow-black th,
+html.a11y-hc-yellow-black td,
+html.a11y-hc-yellow-black tr,
+html.a11y-hc-yellow-black .bg-card,
+html.a11y-hc-yellow-black .bg-background,
+html.a11y-hc-yellow-black .bg-muted,
+html.a11y-hc-yellow-black .bg-secondary {
+  background-color: #000000 !important;
+  color: #ffff00 !important;
+}
+
+html.a11y-hc-yellow-black button,
+html.a11y-hc-yellow-black input,
+html.a11y-hc-yellow-black select,
+html.a11y-hc-yellow-black textarea {
+  background-color: #121212 !important;
+  color: #ffff00 !important;
+  border: 2px solid #ffff00 !important;
+}
+
+html.a11y-hc-yellow-black a {
+  color: #00ffff !important;
+  text-decoration: underline !important;
+}
+
+html.a11y-hc-yellow-black button:hover,
+html.a11y-hc-yellow-black [role="button"]:hover {
+  background-color: #ffff00 !important;
+  color: #000000 !important;
+  border-color: #ffffff !important;
+}
+
+/* B. Alto Contraste Oscuro Intenso */
+html.a11y-hc-dark,
+html.a11y-hc-dark body {
+  background-color: #07090e !important;
+  color: #ffffff !important;
+}
+
+html.a11y-hc-dark div,
+html.a11y-hc-dark .bg-card,
+html.a11y-hc-dark .bg-background {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border-color: #38bdf8 !important;
+}
+
+html.a11y-hc-dark button,
+html.a11y-hc-dark input,
+html.a11y-hc-dark select {
+  background-color: #1e293b !important;
+  color: #ffffff !important;
+  border: 2px solid #38bdf8 !important;
+}
+
+/* C. Alto Contraste Claro (Blanco Puro y Negro) */
+html.a11y-hc-light,
+html.a11y-hc-light body {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+html.a11y-hc-light div,
+html.a11y-hc-light .bg-card,
+html.a11y-hc-light .bg-background,
+html.a11y-hc-light .bg-muted {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border-color: #000000 !important;
+}
+
+html.a11y-hc-light button,
+html.a11y-hc-light input,
+html.a11y-hc-light select {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border: 2px solid #000000 !important;
+  font-weight: 700 !important;
+}
+
+/* --------------------------------------------------------------------------
+   4. Reducción de Movimiento & Animaciones (Fotosensibilidad)
+   -------------------------------------------------------------------------- */
+html.a11y-reduced-motion *,
+html.a11y-reduced-motion *::before,
+html.a11y-reduced-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* --------------------------------------------------------------------------
+   5. Enfoque Ultra-Visible para Navegación por Teclado
+   -------------------------------------------------------------------------- */
+html.a11y-focus-visible *:focus-visible {
+  outline: 3px solid #facc15 !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.9) !important;
+  z-index: 9999 !important;
+}
+
+/* --------------------------------------------------------------------------
+   6. Puntero / Cursor Gigante de Alto Contraste
+   -------------------------------------------------------------------------- */
+html.a11y-large-cursor,
+html.a11y-large-cursor * {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='%23ffff00' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='3 3 10 21 13 13 21 10 3 3'/%3E%3C/svg%3E") 3 3, auto !important;
+}
+
+html.a11y-large-cursor button,
+html.a11y-large-cursor a,
+html.a11y-large-cursor [role="button"] {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='%2300ffff' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='3 3 10 21 13 13 21 10 3 3'/%3E%3C/svg%3E") 3 3, pointer !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. Filtros para Daltonismo
+   -------------------------------------------------------------------------- */
+html.a11y-filter-achromatopsia {
+  filter: grayscale(100%) contrast(120%) !important;
+}
+
+html.a11y-filter-protanopia {
+  filter: url('#a11y-filter-protanopia-svg') !important;
+}
+
+html.a11y-filter-deuteranopia {
+  filter: url('#a11y-filter-deuteranopia-svg') !important;
+}
+
+html.a11y-filter-tritanopia {
+  filter: url('#a11y-filter-tritanopia-svg') !important;
+}
+
+/* Fallback CSS para daltonismo si el SVG no se encuentra */
+@supports not (filter: url('#any')) {
+  html.a11y-filter-protanopia {
+    filter: sepia(40%) saturate(140%) hue-rotate(-20deg) !important;
+  }
+  html.a11y-filter-deuteranopia {
+    filter: sepia(30%) saturate(130%) hue-rotate(30deg) !important;
+  }
+  html.a11y-filter-tritanopia {
+    filter: sepia(50%) hue-rotate(180deg) !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   8. Guía / Regla de Lectura para Tablas
+   -------------------------------------------------------------------------- */
+.a11y-reading-guide-line {
+  position: fixed;
+  left: 0;
+  width: 100vw;
+  height: 38px;
+  pointer-events: none;
+  background-color: rgba(254, 240, 138, 0.25);
+  border-top: 2px solid #ca8a04;
+  border-bottom: 2px solid #ca8a04;
+  z-index: 99998;
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.15);
+  transition: top 0.05s ease-out;
+}
+
+/* --------------------------------------------------------------------------
+   9. Enlace Accesible "Saltar al Contenido Principal"
+   -------------------------------------------------------------------------- */
+.a11y-skip-link {
+  position: absolute;
+  top: -9999px;
+  left: 1rem;
+  background: #000000;
+  color: #ffff00;
+  padding: 0.75rem 1.5rem;
+  font-weight: 800;
+  border: 2px solid #ffff00;
+  border-radius: 0.375rem;
+  z-index: 100000;
+  text-decoration: none;
+  font-size: 1rem;
+}
+
+.a11y-skip-link:focus {
+  top: 1rem;
+  outline: 4px solid #ffffff;
+}
