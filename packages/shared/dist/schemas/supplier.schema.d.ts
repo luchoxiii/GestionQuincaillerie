@@ -1,0 +1,78 @@
+import { z } from 'zod';
+import { DocumentType, TaxCondition } from '../types/enums';
+export declare const CreateSupplierInputSchema: z.ZodObject<{
+    name: z.ZodString;
+    documentType: z.ZodNativeEnum<typeof DocumentType>;
+    documentNum: z.ZodString;
+    taxCondition: z.ZodNativeEnum<typeof TaxCondition>;
+    email: z.ZodUnion<[z.ZodOptional<z.ZodString>, z.ZodLiteral<"">]>;
+    phone: z.ZodOptional<z.ZodString>;
+    address: z.ZodOptional<z.ZodString>;
+    city: z.ZodOptional<z.ZodString>;
+    state: z.ZodOptional<z.ZodString>;
+    zipCode: z.ZodOptional<z.ZodString>;
+    isActive: z.ZodOptional<z.ZodBoolean>;
+}, "strip", z.ZodTypeAny, {
+    name: string;
+    documentType: DocumentType;
+    documentNum: string;
+    taxCondition: TaxCondition;
+    email?: string | undefined;
+    isActive?: boolean | undefined;
+    phone?: string | undefined;
+    address?: string | undefined;
+    city?: string | undefined;
+    state?: string | undefined;
+    zipCode?: string | undefined;
+}, {
+    name: string;
+    documentType: DocumentType;
+    documentNum: string;
+    taxCondition: TaxCondition;
+    email?: string | undefined;
+    isActive?: boolean | undefined;
+    phone?: string | undefined;
+    address?: string | undefined;
+    city?: string | undefined;
+    state?: string | undefined;
+    zipCode?: string | undefined;
+}>;
+export declare const UpdateSupplierInputSchema: z.ZodObject<{
+    name: z.ZodOptional<z.ZodString>;
+    documentType: z.ZodOptional<z.ZodNativeEnum<typeof DocumentType>>;
+    documentNum: z.ZodOptional<z.ZodString>;
+    taxCondition: z.ZodOptional<z.ZodNativeEnum<typeof TaxCondition>>;
+    email: z.ZodOptional<z.ZodUnion<[z.ZodOptional<z.ZodString>, z.ZodLiteral<"">]>>;
+    phone: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+    address: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+    city: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+    state: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+    zipCode: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+    isActive: z.ZodOptional<z.ZodOptional<z.ZodBoolean>>;
+}, "strip", z.ZodTypeAny, {
+    email?: string | undefined;
+    name?: string | undefined;
+    isActive?: boolean | undefined;
+    documentType?: DocumentType | undefined;
+    documentNum?: string | undefined;
+    taxCondition?: TaxCondition | undefined;
+    phone?: string | undefined;
+    address?: string | undefined;
+    city?: string | undefined;
+    state?: string | undefined;
+    zipCode?: string | undefined;
+}, {
+    email?: string | undefined;
+    name?: string | undefined;
+    isActive?: boolean | undefined;
+    documentType?: DocumentType | undefined;
+    documentNum?: string | undefined;
+    taxCondition?: TaxCondition | undefined;
+    phone?: string | undefined;
+    address?: string | undefined;
+    city?: string | undefined;
+    state?: string | undefined;
+    zipCode?: string | undefined;
+}>;
+export type CreateSupplierInput = z.infer<typeof CreateSupplierInputSchema>;
+export type UpdateSupplierInput = z.infer<typeof UpdateSupplierInputSchema>;

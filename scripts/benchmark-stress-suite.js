@@ -181,7 +181,7 @@ function benchCustomerRFMAndChurn() {
       segment = 'VIP';
     } else if (creditLimit >= 300000 || monetaryLtv >= 150000) {
       segment = 'BIG_BUILDER';
-    } else if (monetaryLtv >= 400000 && recencyDays <= 45) {
+    } else if (monetaryLtv >= 40000 && recencyDays <= 45) {
       segment = 'LOYAL_POTENTIAL';
     } else if (recencyDays > 90) {
       segment = 'HIBERNATING';

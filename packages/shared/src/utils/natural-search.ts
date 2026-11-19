@@ -307,28 +307,44 @@ export function matchUserNatural(user: any, query: string): boolean {
 
   if (isCajeroIntent) {
     const hasRole = /vendedor|cajero/i.test(roleNames) || /cajero/i.test(user.username);
-    if (!hasRole && !user.userRoles?.some((ur: any) => ur.roleId === 'r-vendedor')) {
+    const hasUserRole = user.userRoles?.some((ur: any) => {
+      const rn = normalizeText(ur.role?.name);
+      return ur.roleId === 'r-vendedor' || rn === 'vendedor' || rn === 'cajero';
+    });
+    if (!hasRole && !hasUserRole) {
       return false;
     }
   }
 
   if (isAdminIntent) {
     const hasRole = /admin/i.test(roleNames) || /admin/i.test(user.username);
-    if (!hasRole && !user.userRoles?.some((ur: any) => ur.roleId === 'r-admin')) {
+    const hasUserRole = user.userRoles?.some((ur: any) => {
+      const rn = normalizeText(ur.role?.name);
+      return ur.roleId === 'r-admin' || rn === 'admin' || rn === 'administrador';
+    });
+    if (!hasRole && !hasUserRole) {
       return false;
     }
   }
 
   if (isEncargadoIntent) {
     const hasRole = /encargado|supervisor/i.test(roleNames);
-    if (!hasRole && !user.userRoles?.some((ur: any) => ur.roleId === 'r-encargado')) {
+    const hasUserRole = user.userRoles?.some((ur: any) => {
+      const rn = normalizeText(ur.role?.name);
+      return ur.roleId === 'r-encargado' || rn === 'encargado' || rn === 'supervisor';
+    });
+    if (!hasRole && !hasUserRole) {
       return false;
     }
   }
 
   if (isDepositoIntent) {
     const hasRole = /deposito|almacen/i.test(roleNames) || /deposito/i.test(user.username);
-    if (!hasRole && !user.userRoles?.some((ur: any) => ur.roleId === 'r-deposito')) {
+    const hasUserRole = user.userRoles?.some((ur: any) => {
+      const rn = normalizeText(ur.role?.name);
+      return ur.roleId === 'r-deposito' || rn === 'deposito' || rn === 'almacen';
+    });
+    if (!hasRole && !hasUserRole) {
       return false;
     }
   }

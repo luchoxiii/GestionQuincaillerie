@@ -7,7 +7,8 @@ function rightRotate(value: number, amount: number): number {
   return (value >>> amount) | (value << (32 - amount));
 }
 
-export function sha256(ascii: string): string {
+export function sha256(input: string): string {
+  let ascii = unescape(encodeURIComponent(input));
   const mathPow = Math.pow;
   const maxWord = mathPow(2, 32);
   const lengthProperty = 'length';
@@ -115,13 +116,23 @@ export interface AuditBlockData {
 
 export type ChainableAuditEntry = AuditBlockData;
 
+function canonicalizeValue(val: any): any {
+  if (val === null || typeof val !== 'object') return val;
+  if (Array.isArray(val)) return val.map(canonicalizeValue);
+  const sorted: Record<string, any> = {};
+  for (const k of Object.keys(val).sort()) {
+    sorted[k] = canonicalizeValue(val[k]);
+  }
+  return sorted;
+}
+
 /**
  * Computes deterministic SHA-256 hash for an audit log entry
  */
 export function computeAuditLogHash(data: AuditBlockData): string {
   // Normalize details into a sorted canonical string
   const detailsStr = data.details !== undefined && data.details !== null
-    ? JSON.stringify(data.details, Object.keys(data.details).sort())
+    ? JSON.stringify(canonicalizeValue(data.details))
     : '';
 
   const payload = [
