@@ -59,8 +59,23 @@ export function saveSentEmailRecord(record: EmailDispatchRecord) {
   } catch {}
 }
 
+export function escapeHtml(str: string | number | null | undefined): string {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function generateReceiptEmailHtml(payload: SaleReceiptEmailPayload, settings: EmailSettings): string {
-  const companyName = settings.fromName || 'Ferretería Central';
+  const companyName = escapeHtml(settings.fromName || 'Ferretería Central');
+  const safeCustomerName = escapeHtml(payload.customerName);
+  const safeSaleNumber = escapeHtml(payload.saleNumber);
+  const safeInvoiceLetter = escapeHtml(payload.invoiceLetter || 'B');
+  const safePaymentMethod = payload.paymentMethodName ? escapeHtml(payload.paymentMethodName) : '';
+
   const formattedTotal = new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
@@ -81,10 +96,10 @@ export function generateReceiptEmailHtml(payload: SaleReceiptEmailPayload, setti
       (item) => `
       <tr>
         <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #1e293b;">
-          ${item.name}
+          ${escapeHtml(item.name)}
         </td>
         <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: center; color: #475569;">
-          ${item.quantity}
+          ${escapeHtml(item.quantity)}
         </td>
         <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: right; color: #475569;">
           $${item.unitPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
@@ -102,7 +117,7 @@ export function generateReceiptEmailHtml(payload: SaleReceiptEmailPayload, setti
     <html>
     <head>
       <meta charset="utf-8">
-      <title>Comprobante de Compra - ${payload.saleNumber}</title>
+      <title>Comprobante de Compra - ${safeSaleNumber}</title>
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #334155;">
       <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
@@ -111,14 +126,14 @@ export function generateReceiptEmailHtml(payload: SaleReceiptEmailPayload, setti
           <h1 style="margin: 0 0 6px 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">${companyName}</h1>
           <p style="margin: 0; font-size: 13px; color: #94a3b8;">Comprobante Digital de Compra</p>
           <div style="margin-top: 12px; display: inline-block; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; color: #38bdf8;">
-            Venta: ${payload.saleNumber} (${payload.fiscalType === 'BLANCO' ? `Factura Oficial ${payload.invoiceLetter || 'B'}` : 'Ticket X / Remito'})
+            Venta: ${safeSaleNumber} (${payload.fiscalType === 'BLANCO' ? `Factura Oficial ${safeInvoiceLetter}` : 'Ticket X / Remito'})
           </div>
         </div>
 
         <!-- Greeting -->
         <div style="padding: 24px 24px 16px 24px;">
           <p style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #0f172a;">
-            Estimado/a ${payload.customerName}:
+            Estimado/a ${safeCustomerName}:
           </p>
           <p style="margin: 0 0 16px 0; font-size: 13px; line-height: 1.6; color: #475569;">
             Muchas gracias por su compra. A continuación, le enviamos el detalle de los productos adquiridos en nuestro mostrador.
@@ -189,10 +204,10 @@ export function generateReceiptEmailHtml(payload: SaleReceiptEmailPayload, setti
             </div>
 
             ${
-              payload.paymentMethodName
+              safePaymentMethod
                 ? `
             <div style="text-align: right; font-size: 11px; color: #64748b; margin-top: 4px;">
-              Medio de pago: <strong>${payload.paymentMethodName}</strong>
+              Medio de pago: <strong>${safePaymentMethod}</strong>
             </div>
             `
                 : ''
@@ -271,17 +286,23 @@ export async function sendTestEmail(targetEmail: string, customSettings?: EmailS
     throw new Error('Ingrese un email de destino válido para la prueba.');
   }
 
+  const safeFromName = escapeHtml(settings.fromName || 'Ferretería Central');
+  const safeHost = escapeHtml(settings.smtpHost);
+  const safeFromEmail = escapeHtml(settings.fromEmail);
+  const safePort = escapeHtml(settings.smtpPort);
+  const safeSecure = escapeHtml(settings.secure.toUpperCase());
+
   const subject = `Prueba de Conexión SMTP - ${settings.fromName || 'Ferretería Central'}`;
   const html = `
     <div style="font-family: sans-serif; padding: 20px; background: #f8fafc; color: #1e293b;">
       <h2 style="color: #0284c7;">✅ Conexión SMTP Exitosa</h2>
-      <p>Este es un correo de prueba enviado desde <strong>${settings.fromName}</strong>.</p>
+      <p>Este es un correo de prueba enviado desde <strong>${safeFromName}</strong>.</p>
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 15px 0;">
       <ul>
-        <li><strong>Servidor SMTP:</strong> ${settings.smtpHost}</li>
-        <li><strong>Puerto:</strong> ${settings.smtpPort}</li>
-        <li><strong>Seguridad:</strong> ${settings.secure.toUpperCase()}</li>
-        <li><strong>Remitente:</strong> ${settings.fromEmail}</li>
+        <li><strong>Servidor SMTP:</strong> ${safeHost}</li>
+        <li><strong>Puerto:</strong> ${safePort}</li>
+        <li><strong>Seguridad:</strong> ${safeSecure}</li>
+        <li><strong>Remitente:</strong> ${safeFromEmail}</li>
         <li><strong>Fecha de Envío:</strong> ${new Date().toLocaleString('es-AR')}</li>
       </ul>
       <p style="font-size: 12px; color: #64748b;">La configuración del correo corporativo está lista para emitir comprobantes a sus clientes.</p>

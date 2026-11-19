@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OpenSessionDto, CloseSessionDto, CreateMovementDto, CreateRegisterDto } from './dto/cash-register.dto';
 import { CashSessionStatus, CashMovementType } from '@prisma/client';
@@ -78,7 +78,7 @@ export class CashRegisterService {
     });
   }
 
-  async closeSession(userId: string, data: CloseSessionDto) {
+  async closeSession(userId: string, data: CloseSessionDto, userContext?: any) {
     const session = await this.prisma.cashSession.findUnique({
       where: { id: data.sessionId },
       include: { movements: true },
@@ -87,6 +87,12 @@ export class CashRegisterService {
     if (!session) throw new NotFoundException('Sesión no encontrada');
     if (session.status === CashSessionStatus.CLOSED) {
       throw new BadRequestException('La sesión ya está cerrada');
+    }
+
+    // OWASP A01: Broken Access Control & IDOR validation
+    const hasAdminAccess = userContext?.permissions?.includes('cash.view_all') || userContext?.role === 'ADMIN';
+    if (session.userId !== userId && !hasAdminAccess) {
+      throw new ForbiddenException('No tiene autorización para cerrar la sesión de caja de otro usuario');
     }
 
     let inflows = 0;
@@ -115,7 +121,7 @@ export class CashRegisterService {
         closingBalance: data.closingBalance,
         expectedBalance,
         difference,
-        notes: data.notes ? (session.notes ? session.notes + '\\n' + data.notes : data.notes) : session.notes,
+        notes: data.notes ? (session.notes ? session.notes + '\n' + data.notes : data.notes) : session.notes,
       },
     });
   }
@@ -143,13 +149,21 @@ export class CashRegisterService {
     });
   }
 
-  async createMovement(data: CreateMovementDto) {
+  async createMovement(data: CreateMovementDto, userContext?: any) {
     const session = await this.prisma.cashSession.findUnique({
       where: { id: data.sessionId },
     });
     if (!session) throw new NotFoundException('Sesión no encontrada');
     if (session.status !== CashSessionStatus.OPEN) {
       throw new BadRequestException('La sesión de caja está cerrada');
+    }
+
+    // OWASP A01: Broken Access Control & IDOR validation
+    if (userContext?.id) {
+      const hasAdminAccess = userContext?.permissions?.includes('cash.view_all') || userContext?.role === 'ADMIN';
+      if (session.userId !== userContext.id && !hasAdminAccess) {
+        throw new ForbiddenException('No tiene autorización para registrar movimientos en la caja de otro usuario');
+      }
     }
 
     return this.prisma.cashMovement.create({

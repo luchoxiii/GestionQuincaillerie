@@ -58,7 +58,10 @@ export class AuthService {
 
   async validateUser(username: string, pass: string): Promise<any> {
     const user = await this.usersService.findByUsername(username);
-    if (user && (await bcrypt.compare(pass, user.password))) {
+    if (!user || user.isActive === false) {
+      return null;
+    }
+    if (await bcrypt.compare(pass, user.password)) {
       const { password, ...result } = user;
       return result;
     }
@@ -66,10 +69,13 @@ export class AuthService {
   }
 
   async login(user: any) {
-    const payload = { username: user.username, sub: user.id, tv: user.tokenVersion };
+    if (!user || user.isActive === false) {
+      throw new UnauthorizedException('Usuario inactivo');
+    }
+    const payload = { username: user.username, sub: user.id, tv: user.tokenVersion, type: 'access' };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
     const refreshToken = this.jwtService.sign(
-      { sub: user.id, tv: user.tokenVersion },
+      { sub: user.id, tv: user.tokenVersion, type: 'refresh' },
       { expiresIn: '7d' },
     );
 
@@ -85,9 +91,12 @@ export class AuthService {
   async refreshToken(token: string) {
     try {
       const payload = this.jwtService.verify(token);
+      if (payload.type && payload.type !== 'refresh') {
+        throw new UnauthorizedException();
+      }
       const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
 
-      if (!user || user.tokenVersion !== payload.tv) {
+      if (!user || user.isActive === false || user.tokenVersion !== payload.tv) {
         throw new UnauthorizedException();
       }
 
@@ -137,7 +146,7 @@ export class AuthService {
       },
     });
 
-    if (!user) throw new UnauthorizedException();
+    if (!user || user.isActive === false) throw new UnauthorizedException();
 
     const { password, ...profile } = user;
     const permissions = user.userRoles.flatMap((ur) =>

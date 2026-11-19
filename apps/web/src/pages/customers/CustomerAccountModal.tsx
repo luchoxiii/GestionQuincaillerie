@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import toast from 'react-hot-toast';
 
 interface CustomerAccountModalProps {
   open: boolean;
@@ -57,13 +58,15 @@ export function CustomerAccountModal({ open, onOpenChange, customerId }: Custome
           reference,
         }
       });
+      toast.success('Pago registrado correctamente');
       // Optionally reset form
       setReference('');
       if (data?.totalBalance) {
-        setAmount((data.totalBalance - parseFloat(amount)).toString());
+        setAmount(Math.max(0, data.totalBalance - parseFloat(amount)).toString());
       }
     } catch (error) {
       console.error('Error recording payment:', error);
+      toast.error('Error al registrar el pago');
     }
   };
 

@@ -3,7 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useMassPriceUpdate } from '@/services/products.service';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useMassPriceUpdate, useBrands } from '@/services/products.service';
+import { useCategories } from '@/services/categories.service';
 import toast from 'react-hot-toast';
 
 interface MassPriceUpdateModalProps {
@@ -13,10 +15,12 @@ interface MassPriceUpdateModalProps {
 
 export function MassPriceUpdateModal({ open, onOpenChange }: MassPriceUpdateModalProps) {
   const [percentage, setPercentage] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [brandId, setBrandId] = useState('');
+  const [categoryId, setCategoryId] = useState('all');
+  const [brandId, setBrandId] = useState('all');
   const [round, setRound] = useState(true);
 
+  const { data: categories = [] } = useCategories();
+  const { data: brands = [] } = useBrands();
   const { mutate: updatePrices, isPending } = useMassPriceUpdate();
 
   const handleUpdate = () => {
@@ -29,13 +33,16 @@ export function MassPriceUpdateModal({ open, onOpenChange }: MassPriceUpdateModa
     updatePrices(
       { 
         percentage: parsedPercentage, 
-        categoryId: categoryId || undefined, 
-        brandId: brandId || undefined, 
+        categoryId: categoryId && categoryId !== 'all' ? categoryId : undefined, 
+        brandId: brandId && brandId !== 'all' ? brandId : undefined, 
         round 
       },
       {
         onSuccess: () => {
           toast.success('Precios actualizados correctamente');
+          setPercentage('');
+          setCategoryId('all');
+          setBrandId('all');
           onOpenChange(false);
         },
         onError: () => {
@@ -54,11 +61,35 @@ export function MassPriceUpdateModal({ open, onOpenChange }: MassPriceUpdateModa
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
             <Label>Categoría (Opcional)</Label>
-            <Input value={categoryId} onChange={(e) => setCategoryId(e.target.value)} placeholder="ID Categoría" />
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todas las categorías" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las categorías</SelectItem>
+                {categories.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label>Marca (Opcional)</Label>
-            <Input value={brandId} onChange={(e) => setBrandId(e.target.value)} placeholder="ID Marca" />
+            <Select value={brandId} onValueChange={setBrandId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todas las marcas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las marcas</SelectItem>
+                {brands.map((b: any) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label>Porcentaje de Cambio (%)</Label>

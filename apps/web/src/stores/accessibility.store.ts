@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { a11yAudio } from '@/services/a11y-audio.service';
 
 export type HighContrastMode = 'none' | 'yellow-black' | 'dark' | 'light';
 export type FontSizeMode = 'normal' | 'large' | 'xlarge' | 'huge';
@@ -145,6 +146,7 @@ function updateDOMClasses(settings: AccessibilitySettings) {
 
 export const useAccessibilityStore = create<AccessibilityStore>((set, get) => {
   const initial = loadSavedSettings();
+  a11yAudio.setMuted(!initial.soundFeedback);
 
   // Aplicar clases de inmediato si estamos en el navegador
   if (typeof document !== 'undefined') {
@@ -165,6 +167,7 @@ export const useAccessibilityStore = create<AccessibilityStore>((set, get) => {
       textToSpeech: get().textToSpeech,
       keyboardHelper: get().keyboardHelper,
     };
+    a11yAudio.setMuted(!updated.soundFeedback);
     saveSettings(updated);
     updateDOMClasses(updated);
   };

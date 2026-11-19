@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 import { recordAuditLog } from './audit.service';
@@ -66,6 +67,7 @@ export const getLocalStores = (): Store[] => {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
+    localStorage.setItem(STORAGE_KEY_STORES, JSON.stringify(INITIAL_STORES));
   } catch {}
   return INITIAL_STORES;
 };
@@ -87,7 +89,10 @@ export const getActiveStoreId = (): string => {
 export const setActiveStoreId = (id: string) => {
   try {
     localStorage.setItem(STORAGE_KEY_ACTIVE_STORE, id);
-    window.dispatchEvent(new Event('store_changed'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('store_changed'));
+      window.dispatchEvent(new Event('ferreteria_store_changed'));
+    }
   } catch {}
 };
 
@@ -129,11 +134,27 @@ export const useStore = (id: string) => {
 
 export const useActiveStore = () => {
   const { data: stores = [] } = useStores();
-  const activeId = getActiveStoreId();
+  const [activeId, setActiveId] = useState<string>(() => getActiveStoreId());
+
+  useEffect(() => {
+    const handleStoreChange = () => {
+      setActiveId(getActiveStoreId());
+    };
+    window.addEventListener('store_changed', handleStoreChange);
+    window.addEventListener('ferreteria_store_changed', handleStoreChange);
+    window.addEventListener('storage', handleStoreChange);
+    return () => {
+      window.removeEventListener('store_changed', handleStoreChange);
+      window.removeEventListener('ferreteria_store_changed', handleStoreChange);
+      window.removeEventListener('storage', handleStoreChange);
+    };
+  }, []);
+
   const activeStore = stores.find((s) => s.id === activeId) || stores[0] || INITIAL_STORES[0];
 
   const changeStore = (newId: string) => {
     setActiveStoreId(newId);
+    setActiveId(newId);
     toast.success(`Tienda activa cambiada a: ${stores.find((s) => s.id === newId)?.name || newId}`);
   };
 

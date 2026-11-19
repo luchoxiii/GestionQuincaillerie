@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,9 +11,16 @@ import toast from 'react-hot-toast';
 interface StockAdjustModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialProductId?: string;
+  initialWarehouseId?: string;
 }
 
-export function StockAdjustModal({ open, onOpenChange }: StockAdjustModalProps) {
+export function StockAdjustModal({
+  open,
+  onOpenChange,
+  initialProductId,
+  initialWarehouseId,
+}: StockAdjustModalProps) {
   const [productId, setProductId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [type, setType] = useState('ADJUST');
@@ -24,9 +31,17 @@ export function StockAdjustModal({ open, onOpenChange }: StockAdjustModalProps) 
   const { data: products } = useProducts();
   const { mutate: adjustStock, isPending } = useAdjustStock();
 
+  useEffect(() => {
+    if (open) {
+      if (initialProductId) setProductId(initialProductId);
+      if (initialWarehouseId) setWarehouseId(initialWarehouseId);
+    }
+  }, [open, initialProductId, initialWarehouseId]);
+
   const handleAdjust = () => {
     const qty = parseInt(quantity, 10);
-    if (!productId || !warehouseId || isNaN(qty) || qty <= 0) {
+    const isInvalidQty = type === 'ADJUST' ? isNaN(qty) || qty < 0 : isNaN(qty) || qty <= 0;
+    if (!productId || !warehouseId || isInvalidQty) {
       toast.error('Complete todos los campos correctamente');
       return;
     }

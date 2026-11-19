@@ -56,8 +56,8 @@ export class InventoryService {
     return { data, total, page: Number(page), limit: Number(limit) };
   }
 
-  async adjustStock(data: { productId: string, warehouseId: string, quantity: number, type: 'ADJUSTMENT' | 'INITIAL', notes?: string, userId?: string }) {
-    const { productId, warehouseId, quantity, type, notes, userId } = data;
+  async adjustStock(data: { productId: string, warehouseId: string, quantity: number, type?: 'ADJUSTMENT' | 'INITIAL', notes?: string, userId?: string }) {
+    const { productId, warehouseId, quantity, type = 'ADJUSTMENT', notes, userId } = data;
     
     return this.prisma.$transaction(async (tx) => {
       const stock = await tx.warehouseStock.findUnique({
@@ -102,6 +102,10 @@ export class InventoryService {
 
   async createTransfer(data: { sourceId: string, destinationId: string, items: { productId: string, quantity: number }[], notes?: string, createdById: string }) {
     const { sourceId, destinationId, items, notes, createdById } = data;
+
+    if (sourceId === destinationId) {
+      throw new BadRequestException('El almacén de origen y destino no pueden ser el mismo');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const transfer = await tx.stockTransfer.create({
@@ -214,6 +218,14 @@ export class InventoryService {
 
   async updateCountItem(countId: string, data: { productId: string, countedQty: number }) {
     const { productId, countedQty } = data;
+
+    const count = await this.prisma.inventoryCount.findUnique({
+      where: { id: countId }
+    });
+    if (!count) throw new NotFoundException('Count not found');
+    if (count.status === 'COMPLETED') {
+      throw new BadRequestException('Count already applied');
+    }
     
     const item = await this.prisma.inventoryCountItem.findFirst({
       where: { inventoryCountId: countId, productId }

@@ -233,6 +233,17 @@ export function NewQuoteModal({ isOpen, onClose, onCreated }: NewQuoteModalProps
         total: created.total,
         validityHours,
       });
+      // Reset form fields
+      setSelectedCustomerId('');
+      setCustomerName('');
+      setCustomerDocument('');
+      setCustomerPhone('');
+      setCustomerEmail('');
+      setValidityHours(48);
+      setItems([]);
+      setProductSearch('');
+      setNotes('');
+      setTerms('Precios congelados por 48 hs hábiles sujeto a stock. Flete a convenir.');
       onCreated?.(created);
       onClose();
     } catch (err) {

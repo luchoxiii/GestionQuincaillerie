@@ -25,7 +25,13 @@ function sanitizeDetails(data: any): any {
 
   const clean: Record<string, any> = {};
   for (const [key, value] of Object.entries(data)) {
-    if (SENSITIVE_KEYS.has(key.toLowerCase())) {
+    const normalizedKey = key.toLowerCase().replace(/[-_]/g, '');
+    if (
+      SENSITIVE_KEYS.has(normalizedKey) ||
+      normalizedKey.includes('password') ||
+      normalizedKey.includes('secret') ||
+      normalizedKey.includes('token')
+    ) {
       clean[key] = '[REDACTED]';
     } else if (value && typeof value === 'object') {
       clean[key] = sanitizeDetails(value);
@@ -57,11 +63,15 @@ export class AuditInterceptor implements NestInterceptor {
             if (method === 'PUT' || method === 'PATCH') action = 'UPDATE';
             if (method === 'DELETE') action = 'DELETE';
 
-            const urlParts = (url || '').split('/').filter(Boolean);
+            const cleanUrl = (url || '').split('?')[0];
+            const urlParts = cleanUrl.split('/').filter(Boolean);
             const entity = urlParts[1] || 'unknown';
             const entityId = response?.id || urlParts[2] || 'unknown';
 
             const sanitizedDetails = body ? sanitizeDetails(body) : undefined;
+            const forwarded = req.headers?.['x-forwarded-for'];
+            const rawIp = req.ip || (Array.isArray(forwarded) ? forwarded[0] : forwarded) || 'unknown';
+            const ipAddress = typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : 'unknown';
 
             await this.prisma.auditLog.create({
               data: {
@@ -70,7 +80,7 @@ export class AuditInterceptor implements NestInterceptor {
                 entity,
                 entityId: String(entityId),
                 details: sanitizedDetails,
-                ipAddress: req.ip || req.headers?.['x-forwarded-for'] || 'unknown',
+                ipAddress,
               },
             });
           }

@@ -118,7 +118,7 @@ export function ShippingLabelModal({ isOpen, open, onClose, onOpenChange, sale }
             <Copy className="w-3.5 h-3.5 mr-1.5" /> Copiar Tracking
           </Button>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onClose} className="text-xs">
+            <Button variant="outline" size="sm" onClick={handleModalClose} className="text-xs">
               Cerrar
             </Button>
             <Button size="sm" onClick={handlePrint} className="text-xs">

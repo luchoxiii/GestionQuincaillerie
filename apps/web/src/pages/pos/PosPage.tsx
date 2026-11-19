@@ -16,9 +16,9 @@ import { Badge } from '../../components/ui/badge';
 import { Search, Trash2, Plus, Minus, ShoppingCart, Ban, Tag, Gift, Sparkles, X, FileSpreadsheet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Sale } from '@ferreteria/shared';
-import { PriceCheckModal } from '../../components/common/PriceCheckModal';
 import { useAccessibilityStore } from '../../stores/accessibility.store';
 import { a11yAudio } from '../../services/a11y-audio.service';
+import { formatCurrency } from '@/lib/utils';
 
 
 export function PosPage() {
@@ -46,7 +46,6 @@ export function PosPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [isPriceCheckOpen, setIsPriceCheckOpen] = useState(false);
   const [couponInput, setCouponInput] = useState('');
   
   const { data: categories = [] } = useCategories();
@@ -55,31 +54,64 @@ export function PosPage() {
     categoryId: categoryFilter || undefined,
     limit: 50
   });
+  const { data: fullCatalogData } = useProducts({ limit: 500 });
 
   const { data: customersData } = useCustomers({ limit: 50 });
   const customers = customersData?.data || [];
   
   const products: any[] = (Array.isArray(productsData) ? productsData : (productsData as any)?.data) || [];
+  const fullCatalog: any[] = (Array.isArray(fullCatalogData) ? fullCatalogData : (fullCatalogData as any)?.data) || [];
   
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isTicketOpen, setIsTicketOpen] = useState(false);
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
 
-  useBarcodeScanner((barcode) => {
-    // Intentar encontrar producto por código de barras o SKU
-    const product = products.find((p: any) => (p.code || p.sku) === barcode);
-    if (product) {
-      const { soundFeedback, textToSpeech } = useAccessibilityStore.getState();
-      if (soundFeedback) a11yAudio.playScan();
-      if (textToSpeech) a11yAudio.speak(`${product.name}, agregado al carrito`);
+  const handleAddProductToCart = (product: any) => {
+    const stockVal = Number(product.stock ?? product.totalStock ?? 0);
+    const existingQty = cart.find((i) => i.product.id === product.id)?.quantity || 0;
+    if (stockVal <= 0 || existingQty >= stockVal) {
+      toast.error('Sin stock disponible');
+      return false;
+    }
+    const taxRate = Number(product.taxRate ?? product.taxes?.[0]?.tax?.rate ?? 21);
+    addItem({
+      id: product.id,
+      name: product.name,
+      sku: product.sku || product.code || '',
+      price: Number(product.price ?? product.salePrice ?? 0),
+      taxRate,
+    });
+    return true;
+  };
 
-      addItem({ 
-        id: product.id, 
-        name: product.name, 
-        sku: product.sku || product.code || '', 
-        price: Number(product.price ?? product.salePrice ?? 0), 
-        taxRate: Number(product.taxRate ?? 21) 
-      });
+  useBarcodeScanner((barcode) => {
+    if (isCheckoutOpen || isTicketOpen || Boolean(document.querySelector('[role="dialog"]'))) {
+      return;
+    }
+    // Intentar encontrar producto por código de barras o SKU en catálogo completo y lista actual
+    const searchPool = fullCatalog.length > 0 ? fullCatalog : products;
+    const product =
+      searchPool.find(
+        (p: any) =>
+          p.code === barcode ||
+          p.sku === barcode ||
+          p.barcode === barcode ||
+          p.barcodes?.some((b: any) => b.barcode === barcode)
+      ) ||
+      products.find(
+        (p: any) =>
+          p.code === barcode ||
+          p.sku === barcode ||
+          p.barcode === barcode ||
+          p.barcodes?.some((b: any) => b.barcode === barcode)
+      );
+    if (product) {
+      const added = handleAddProductToCart(product);
+      if (added) {
+        const { soundFeedback, textToSpeech } = useAccessibilityStore.getState();
+        if (soundFeedback) a11yAudio.playScan();
+        if (textToSpeech) a11yAudio.speak(`${product.name}, agregado al carrito`);
+      }
     } else {
       if (useAccessibilityStore.getState().soundFeedback) {
         a11yAudio.playAlert();
@@ -89,15 +121,22 @@ export function PosPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        isCheckoutOpen ||
+        isTicketOpen ||
+        useAccessibilityStore.getState().isMenuOpen ||
+        Boolean(document.querySelector('[role="dialog"]')) ||
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
       if (e.key === 'F2') {
         e.preventDefault();
         document.getElementById('quick-search')?.focus();
-      } else if (e.key === 'F3') {
-        e.preventDefault();
-        setIsPriceCheckOpen(prev => !prev);
       } else if (e.key === 'F4') {
         e.preventDefault();
-        if (cart.length > 0) setIsCheckoutOpen(true);
+        if (cart.length > 0 && !selectedCustomer?.isBanned) setIsCheckoutOpen(true);
       } else if (e.key === 'Escape') {
         if (cart.length > 0) {
           const { soundFeedback, textToSpeech } = useAccessibilityStore.getState();
@@ -109,7 +148,7 @@ export function PosPage() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart, clearCart]);
+  }, [cart, clearCart, isCheckoutOpen, isTicketOpen, selectedCustomer]);
 
 
   // Auto-select customer from URL query
@@ -142,7 +181,8 @@ export function PosPage() {
       discountValue: res.coupon.discountValue,
       discountAmount: res.calculatedDiscount,
       description: res.coupon.description,
-    });
+      ...(res.coupon.maxDiscountAmount !== undefined ? { maxDiscountAmount: res.coupon.maxDiscountAmount } : {}),
+    } as any);
     toast.success(res.message);
     setCouponInput('');
   };
@@ -179,7 +219,7 @@ export function PosPage() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => setIsPriceCheckOpen(true)}
+            onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F3' }))}
             className="bg-amber-50 hover:bg-amber-100 text-amber-950 border-amber-300 font-semibold gap-1.5 shrink-0 shadow-xs"
           >
             <Tag className="h-4 w-4 text-amber-700" />
@@ -209,14 +249,13 @@ export function PosPage() {
           {products.map((product: any) => {
             const productPrice = Number(product.price ?? product.salePrice ?? 0);
             const productCode = product.sku || product.code || '';
+            const stockVal = Number(product.stock ?? product.totalStock ?? 0);
             return (
-              <Card key={product.id} className="cursor-pointer hover:border-primary transition-colors" onClick={() => addItem({
-                id: product.id,
-                name: product.name,
-                sku: productCode,
-                price: productPrice,
-                taxRate: Number(product.taxRate ?? 21)
-              })}>
+              <Card
+                key={product.id}
+                className={`transition-colors ${stockVal <= 0 ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-primary'}`}
+                onClick={() => handleAddProductToCart(product)}
+              >
                 <CardContent className="p-4 flex flex-col h-full justify-between">
                   <div>
                     <h3 className="font-semibold line-clamp-2" title={product.name}>{product.name}</h3>
@@ -224,7 +263,9 @@ export function PosPage() {
                   </div>
                   <div className="flex justify-between items-center mt-2">
                     <span className="font-bold text-lg">${productPrice.toFixed(2)}</span>
-                    <Badge variant="secondary">Stock: {product.stock || 10}</Badge>
+                    <Badge variant={stockVal <= 0 ? 'destructive' : 'secondary'}>
+                      {stockVal <= 0 ? 'Sin stock' : `Stock: ${stockVal}`}
+                    </Badge>
                   </div>
                 </CardContent>
               </Card>
@@ -323,7 +364,12 @@ export function PosPage() {
             </div>
           ) : (
             <ul className="space-y-3">
-              {cart.map(item => (
+              {cart.map(item => {
+                const catalogProd =
+                  fullCatalog.find((p: any) => p.id === item.product.id) ||
+                  products.find((p: any) => p.id === item.product.id);
+                const maxStock = catalogProd ? Number(catalogProd.stock ?? catalogProd.totalStock ?? 0) : Infinity;
+                return (
                 <li key={item.product.id} className="flex flex-col border-b pb-2">
                   <div className="flex justify-between mb-1">
                     <span className="font-medium truncate pr-2">{item.product.name}</span>
@@ -335,7 +381,19 @@ export function PosPage() {
                         <Minus className="w-3 h-3" />
                       </Button>
                       <span className="w-6 text-center">{item.quantity}</span>
-                      <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-6 w-6"
+                        disabled={item.quantity >= maxStock}
+                        onClick={() => {
+                          if (item.quantity >= maxStock) {
+                            toast.error('Sin stock disponible');
+                            return;
+                          }
+                          updateQuantity(item.product.id, item.quantity + 1);
+                        }}
+                      >
                         <Plus className="w-3 h-3" />
                       </Button>
                       <span className="ml-2">x ${item.unitPrice.toFixed(2)}</span>
@@ -345,7 +403,8 @@ export function PosPage() {
                     </Button>
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>
@@ -361,7 +420,7 @@ export function PosPage() {
                     <div className="flex items-center gap-1.5">
                       <span className="font-bold text-emerald-800">{appliedCoupon.code}</span>
                       <span className="text-emerald-700 font-semibold">
-                        (-${appliedCoupon.discountAmount.toFixed(2)})
+                        (-{formatCurrency(getTotalDiscount())})
                       </span>
                     </div>
                     <p className="text-[10px] text-emerald-600 truncate max-w-[210px]">
@@ -486,11 +545,6 @@ export function PosPage() {
         isOpen={isTicketOpen}
         onClose={() => setIsTicketOpen(false)}
         sale={completedSale}
-      />
-
-      <PriceCheckModal 
-        isOpen={isPriceCheckOpen}
-        onClose={() => setIsPriceCheckOpen(false)}
       />
     </div>
   );

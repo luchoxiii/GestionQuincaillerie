@@ -210,10 +210,12 @@ export class UsersService {
   }
 
   async remove(id: string) {
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id },
       data: { isActive: false },
     });
+    const { password, ...result } = updated;
+    return result;
   }
 
   async assignRoles(id: string, roleIds: string[]) {

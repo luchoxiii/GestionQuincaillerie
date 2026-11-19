@@ -208,6 +208,7 @@ export const getLocalAuditLogs = (): AuditLog[] => {
         return parsed;
       }
     }
+    localStorage.setItem(STORAGE_KEY_AUDIT, JSON.stringify(INITIAL_AUDIT_LOGS));
   } catch {}
   return INITIAL_AUDIT_LOGS;
 };

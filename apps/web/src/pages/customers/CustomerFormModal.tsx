@@ -37,6 +37,13 @@ interface CustomerFormModalProps {
   customer?: Customer;
 }
 
+const normalizeTaxCondition = (cond?: string): TaxCondition => {
+  if (cond === 'MONOTRIBUTO' || cond === 'MONOTRIBUTISTA') {
+    return TaxCondition.MONOTRIBUTISTA;
+  }
+  return (cond as TaxCondition) || TaxCondition.CONSUMIDOR_FINAL;
+};
+
 export function CustomerFormModal({ open, onOpenChange, customer }: CustomerFormModalProps) {
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer();
@@ -46,8 +53,8 @@ export function CustomerFormModal({ open, onOpenChange, customer }: CustomerForm
     defaultValues: {
       name: customer?.name || '',
       documentType: (customer?.documentType as DocumentType) || DocumentType.DNI,
-      documentNum: customer?.documentNum || '',
-      taxCondition: (customer?.taxCondition as TaxCondition) || TaxCondition.CONSUMIDOR_FINAL,
+      documentNum: customer?.documentNum || (customer as any)?.documentNumber || '',
+      taxCondition: normalizeTaxCondition(customer?.taxCondition as string),
       email: customer?.email || '',
       phone: customer?.phone || '',
       address: customer?.address || '',
@@ -65,9 +72,9 @@ export function CustomerFormModal({ open, onOpenChange, customer }: CustomerForm
       if (customer) {
         form.reset({
           name: customer.name,
-          documentType: customer.documentType as DocumentType,
-          documentNum: customer.documentNum,
-          taxCondition: customer.taxCondition as TaxCondition,
+          documentType: (customer.documentType as DocumentType) || DocumentType.DNI,
+          documentNum: customer.documentNum || (customer as any)?.documentNumber || '',
+          taxCondition: normalizeTaxCondition(customer.taxCondition as string),
           email: customer.email || '',
           phone: customer.phone || '',
           address: customer.address || '',
@@ -150,7 +157,7 @@ export function CustomerFormModal({ open, onOpenChange, customer }: CustomerForm
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Tipo Doc</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Seleccione..." />
@@ -187,7 +194,7 @@ export function CustomerFormModal({ open, onOpenChange, customer }: CustomerForm
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Condición IVA</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Seleccione..." />

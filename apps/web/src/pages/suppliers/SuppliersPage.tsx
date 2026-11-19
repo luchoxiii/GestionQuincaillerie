@@ -14,10 +14,11 @@ export default function SuppliersPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [supplierToEdit, setSupplierToEdit] = useState<any>(null);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
   
   const { data: suppliers = [], isLoading } = useSuppliers();
   const deleteSupplier = useDeleteSupplier();
+  const selectedSupplier = suppliers.find((s: any) => s.id === selectedSupplierId) || null;
 
   const handleExportCSV = () => {
     if (!suppliers || suppliers.length === 0) {
@@ -112,7 +113,7 @@ export default function SuppliersPage() {
                     <td className="p-4 align-middle text-right">
                       <div className="flex justify-end items-center gap-2">
                         <Button variant="outline" size="sm" onClick={() => {
-                          setSelectedSupplier(sup);
+                          setSelectedSupplierId(sup.id);
                           setAccountOpen(true);
                         }}>Cuenta Corriente</Button>
                         <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(sup)} title="Editar">

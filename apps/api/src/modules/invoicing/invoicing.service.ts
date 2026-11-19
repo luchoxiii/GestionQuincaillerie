@@ -59,6 +59,7 @@ export class InvoicingService {
       });
 
       if (!sale) throw new NotFoundException('Venta no encontrada');
+      if (sale.status !== 'COMPLETED') throw new BadRequestException('Solo se pueden facturar ventas completadas');
       if (sale.invoice) throw new BadRequestException('La venta ya fue facturada');
       if (!sale.customer) throw new BadRequestException('La venta no tiene un cliente asociado');
 
@@ -269,9 +270,9 @@ export class InvoicingService {
       if (origInvoice.status !== InvoiceStatus.AUTHORIZED) {
         throw new BadRequestException('Solo se pueden hacer notas de crédito de facturas autorizadas');
       }
-
-      // Check if it already has a credit note? We might skip this for simplicity if not modeled explicitly, 
-      // but conceptually a credit note reverses it. We will issue one.
+      if (['003', '008', '013'].includes(origInvoice.invoiceType?.code)) {
+        throw new BadRequestException('No se puede emitir una nota de crédito sobre otra nota de crédito');
+      }
 
       const ncTypeId = await this.determineInvoiceType(origInvoice.customer.taxCondition, true);
 
@@ -284,6 +285,11 @@ export class InvoicingService {
       };
 
       const afipResult = await this.afipService.authorizeInvoice(afipData);
+
+      await tx.invoice.update({
+        where: { id: origInvoice.id },
+        data: { status: InvoiceStatus.VOIDED },
+      });
 
       const creditNote = await tx.invoice.create({
         data: {
@@ -442,22 +448,27 @@ export class InvoicingService {
     let totalFacturado = 0;
     let totalIva21 = 0;
     let totalIva105 = 0;
+    let totalIva27 = 0;
     let countFacturasA = 0;
     let countFacturasB = 0;
 
     for (const inv of invoices) {
-      const mult = (inv.invoiceType.code === '003' || inv.invoiceType.code === '008') ? -1 : 1;
+      const isCreditNote = ['003', '008', '013'].includes(inv.invoiceType.code);
+      const mult = isCreditNote ? -1 : 1;
       
       totalFacturado += Number(inv.total) * mult;
 
-      if (inv.invoiceType.letter === 'A') countFacturasA++;
-      else if (inv.invoiceType.letter === 'B') countFacturasB++;
+      if (!isCreditNote) {
+        if (inv.invoiceType.letter === 'A') countFacturasA++;
+        else if (inv.invoiceType.letter === 'B') countFacturasB++;
+      }
 
       for (const tax of inv.taxes) {
         const rate = Number(tax.taxRate);
         const amt = Number(tax.taxAmount) * mult;
         if (rate === 21) totalIva21 += amt;
         else if (rate === 10.5) totalIva105 += amt;
+        else if (rate === 27) totalIva27 += amt;
       }
     }
 
@@ -466,6 +477,7 @@ export class InvoicingService {
       totalFacturado,
       totalIva21,
       totalIva105,
+      totalIva27,
       countFacturasA,
       countFacturasB
     };

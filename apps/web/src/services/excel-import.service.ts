@@ -84,11 +84,29 @@ function getColumnValue(row: Record<string, any>, candidates: string[]): string 
     }
   }
 
-  // 2. Coincidencia por inclusión (ej. "nombredelproducto" incluye "nombre")
+  // 2. Coincidencia por inclusión controlada (evitando contaminación cruzada entre columnas similares)
+  const isConflictingMatch = (kNorm: string, c: string): boolean => {
+    if ((c === 'precio' || c === 'venta' || c === 'precioventa') && (kNorm.includes('costo') || kNorm.includes('cost'))) {
+      return true;
+    }
+    if ((c === 'stock' || c === 'existencias') && kNorm.includes('min')) {
+      return true;
+    }
+    if ((c === 'documento' || c === 'numerodocumento') && kNorm.includes('tipo')) {
+      return true;
+    }
+    if (c === 'iva' && (kNorm.includes('condicion') || kNorm.includes('situacion')) && !candidateNorms.includes('condicioniva')) {
+      return true;
+    }
+    return false;
+  };
+
   for (const [key, val] of Object.entries(row)) {
     const kNorm = normalizeKey(key);
+    if (!kNorm) continue;
     for (const c of candidateNorms) {
-      if (kNorm.includes(c) || c.includes(kNorm)) {
+      if (!c || isConflictingMatch(kNorm, c)) continue;
+      if ((c.length >= 3 && kNorm.includes(c)) || (kNorm.length >= 3 && c.includes(kNorm))) {
         if (val !== undefined && val !== null && String(val).trim() !== '') {
           return String(val).trim();
         }
@@ -100,16 +118,39 @@ function getColumnValue(row: Record<string, any>, candidates: string[]): string 
 }
 
 /**
- * Parsea un número de forma tolerante (admite "$", comas decimales, etc.)
+ * Parsea un número de forma inteligente (distingue separadores de miles '.' de puntos decimales y comas decimales)
  */
 function parseNumber(val: any, defaultVal = 0): number {
   if (typeof val === 'number') return isNaN(val) ? defaultVal : val;
-  if (!val) return defaultVal;
-  const clean = String(val)
-    .replace(/\$/g, '')
-    .replace(/\s/g, '')
-    .replace(/\./g, '') // Quita separadores de miles
-    .replace(',', '.'); // Cambia coma decimal por punto
+  if (val === undefined || val === null || val === '') return defaultVal;
+  let clean = String(val)
+    .replace(/[$%\s]/g, '')
+    .trim();
+  if (!clean) return defaultVal;
+
+  if (clean.includes('.') && clean.includes(',')) {
+    const lastDot = clean.lastIndexOf('.');
+    const lastComma = clean.lastIndexOf(',');
+    if (lastComma > lastDot) {
+      // Formato 1.250,50 -> 1250.50
+      clean = clean.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Formato 1,250.50 -> 1250.50
+      clean = clean.replace(/,/g, '');
+    }
+  } else if (clean.includes(',')) {
+    if (/^-?\d{1,3}(,\d{3})+$/.test(clean)) {
+      clean = clean.replace(/,/g, '');
+    } else {
+      clean = clean.replace(',', '.');
+    }
+  } else if (clean.includes('.')) {
+    // Si tiene grupos exactos de 3 dígitos tras el punto (ej. 15.000 o 500.000 o 1.250.000), es separador de miles
+    if (/^-?\d{1,3}(\.\d{3})+$/.test(clean)) {
+      clean = clean.replace(/\./g, '');
+    }
+  }
+
   const num = parseFloat(clean);
   return isNaN(num) ? defaultVal : num;
 }
@@ -188,9 +229,30 @@ export function validateAndNormalizeProducts(
   });
 }
 
-/**
- * Descarga la plantilla modelo de Excel para Productos
- */
+function triggerBrowserWorkbookDownload(wb: XLSX.WorkBook, filename: string, format: 'xlsx' | 'csv') {
+  if (typeof document !== 'undefined' && typeof Blob !== 'undefined') {
+    const wbout = XLSX.write(wb, { bookType: format === 'csv' ? 'csv' : 'xlsx', type: 'array' });
+    const mime =
+      format === 'csv'
+        ? 'text/csv;charset=utf-8;'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const blob = new Blob([wbout], { type: mime });
+    if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      if (typeof URL.revokeObjectURL === 'function') {
+        URL.revokeObjectURL(url);
+      }
+    }
+    return;
+  }
+  XLSX.writeFile(wb, filename, format === 'csv' ? { bookType: 'csv' } : undefined);
+}
 export function downloadProductTemplate(format: 'xlsx' | 'csv' = 'xlsx') {
   const sampleData = [
     {
@@ -267,9 +329,9 @@ export function downloadProductTemplate(format: 'xlsx' | 'csv' = 'xlsx') {
   XLSX.utils.book_append_sheet(wb, ws, 'Productos');
 
   if (format === 'csv') {
-    XLSX.writeFile(wb, 'plantilla_productos_ferreteria.csv', { bookType: 'csv' });
+    triggerBrowserWorkbookDownload(wb, 'plantilla_productos_ferreteria.csv', 'csv');
   } else {
-    XLSX.writeFile(wb, 'plantilla_productos_ferreteria.xlsx');
+    triggerBrowserWorkbookDownload(wb, 'plantilla_productos_ferreteria.xlsx', 'xlsx');
   }
 }
 
@@ -405,8 +467,8 @@ export function downloadCustomerTemplate(format: 'xlsx' | 'csv' = 'xlsx') {
   XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
 
   if (format === 'csv') {
-    XLSX.writeFile(wb, 'plantilla_clientes_ferreteria.csv', { bookType: 'csv' });
+    triggerBrowserWorkbookDownload(wb, 'plantilla_clientes_ferreteria.csv', 'csv');
   } else {
-    XLSX.writeFile(wb, 'plantilla_clientes_ferreteria.xlsx');
+    triggerBrowserWorkbookDownload(wb, 'plantilla_clientes_ferreteria.xlsx', 'xlsx');
   }
 }

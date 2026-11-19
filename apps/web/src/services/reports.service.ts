@@ -109,7 +109,7 @@ export const useSalesReport = (period: string = '30d', filters?: { startDate?: s
 
       // Filter local sales by date range
       const periodSales = (Array.isArray(localSales) ? localSales : []).filter((s) => {
-        if (s.status === 'VOIDED') return false;
+        if (s.status === 'VOIDED' || s.status === 'CANCELLED') return false;
         const sDate = s.createdAt ? new Date(s.createdAt) : new Date();
         return sDate >= start && sDate <= end;
       });
@@ -182,10 +182,11 @@ export const useSalesReport = (period: string = '30d', filters?: { startDate?: s
         baselineCount = chartPoints.reduce((acc, p) => acc + (p.count || 1), 0);
       }
 
-      const finalRevenue = totalRevenue > 0 ? totalRevenue + (baselineRevenue * 0.3) : baselineRevenue;
-      const finalCost = totalCost > 0 ? totalCost + (baselineCost * 0.3) : baselineCost;
+      const hasRealSales = periodSales.length > 0 && totalRevenue > 0;
+      const finalRevenue = hasRealSales ? totalRevenue : baselineRevenue;
+      const finalCost = hasRealSales ? totalCost : baselineCost;
       const finalGrossProfit = Math.max(0, finalRevenue - finalCost);
-      const finalCount = totalCount > 0 ? totalCount + Math.round(baselineCount * 0.3) : baselineCount;
+      const finalCount = hasRealSales ? totalCount : baselineCount;
       const finalAverageTicket = finalCount > 0 ? Math.round(finalRevenue / finalCount) : 0;
       const finalAverageMargin = finalRevenue > 0 ? Number(((finalGrossProfit / finalRevenue) * 100).toFixed(1)) : 38;
 
@@ -275,12 +276,50 @@ export const useIvaVentas = (filters?: { month: number; year: number }) => {
   });
 };
 
-export const useIvaCompras = (filters?: { month: number; year: number }) => {
+export const useIvaCompras = (filters?: { month?: number; year?: number }) => {
   return useQuery({
     queryKey: ['reports', 'iva-compras', filters],
     queryFn: async () => {
-      // const { data } = await api.get('/reports/iva-compras', { params: filters });
-      // return data;
+      try {
+        const raw = localStorage.getItem('ferreteria_local_purchases');
+        const supsRaw = localStorage.getItem('ferreteria_local_suppliers');
+        const sups = supsRaw ? JSON.parse(supsRaw) : [];
+        if (raw) {
+          const purchases = JSON.parse(raw);
+          if (Array.isArray(purchases) && purchases.length > 0) {
+            const validPurchases = purchases.filter((p: any) => p.status !== 'CANCELLED');
+            const records = validPurchases.map((p: any) => {
+              const total = Number(p.total || 0);
+              const net = Math.round((total / 1.21) * 100) / 100;
+              const iva21 = Math.round((total - net) * 100) / 100;
+              const sup = sups.find((s: any) => s.id === p.supplierId);
+              const parts = String(p.invoiceNumber || 'A-0001-00001234').split('-');
+              return {
+                date: p.date || new Date().toISOString().split('T')[0],
+                type: parts[0]?.length === 1 ? `Factura ${parts[0]}` : 'Factura A',
+                pos: parts[1] || '0001',
+                number: parts[2] || p.invoiceNumber || '00001234',
+                cuit: sup?.cuit || '30-12345678-9',
+                name: p.supplier || sup?.name || 'Proveedor General',
+                net,
+                iva21,
+                iva105: 0,
+                total,
+              };
+            });
+            const totals = records.reduce(
+              (acc: any, r: any) => ({
+                net: Math.round((acc.net + r.net) * 100) / 100,
+                iva21: Math.round((acc.iva21 + r.iva21) * 100) / 100,
+                iva105: 0,
+                total: Math.round((acc.total + r.total) * 100) / 100,
+              }),
+              { net: 0, iva21: 0, iva105: 0, total: 0 }
+            );
+            return { records, totals };
+          }
+        }
+      } catch {}
       return {
         records: [
           { date: '2023-10-05', type: 'Factura A', pos: '0004', number: '00004321', cuit: '30-33333333-3', name: 'Distribuidora Ferretera', net: 80000, iva21: 16800, iva105: 0, total: 96800 },

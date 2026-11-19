@@ -32,8 +32,8 @@ export class SalesService {
     });
   }
 
-  async getSale(id: string) {
-    const sale = await this.prisma.sale.findUnique({
+  async getSale(id: string, prismaClient: any = this.prisma) {
+    const sale = await prismaClient.sale.findUnique({
       where: { id },
       include: {
         items: { include: { product: true } },
@@ -50,11 +50,13 @@ export class SalesService {
     return this.prisma.$transaction(async (tx) => {
       // a. Validate and lock stock
       let subtotal = 0;
+      let totalTaxAmount = 0;
       const saleItemsToCreate: any[] = [];
 
       for (const item of data.items) {
         const product = await tx.product.findUnique({
           where: { id: item.productId },
+          include: { taxes: { include: { tax: true } } },
         });
 
         if (!product) {
@@ -82,38 +84,38 @@ export class SalesService {
           },
         });
 
-        // c. Create StockMovement
-        await tx.stockMovement.create({
-          data: {
-            warehouseId: data.warehouseId,
-            productId: item.productId,
-            type: StockMovementType.SALE_OUT,
-            quantity: -item.quantity,
-            userId,
-            notes: 'Venta',
-          },
-        });
-
-        const unitPrice = Number(product.salePrice);
-        const taxRate = 0; // Simplified for now
-        const taxAmount = 0;
-        const total = unitPrice * item.quantity;
+        const unitPrice = item.unitPrice !== undefined ? Number(item.unitPrice) : Number(product.salePrice);
+        const itemDiscount = item.discount ? Number(item.discount) : 0;
+        const productTaxRate =
+          Array.isArray(product.taxes) && product.taxes.length > 0
+            ? Number(product.taxes[0]?.tax?.rate ?? 0)
+            : 0;
+        const taxRate = item.taxRate !== undefined ? Number(item.taxRate) : productTaxRate;
+        const lineSubtotal = Math.max(0, unitPrice * item.quantity - itemDiscount);
+        const taxAmount = taxRate > 0 ? Number(((lineSubtotal * taxRate) / 100).toFixed(2)) : 0;
+        const total = lineSubtotal + taxAmount;
         
-        subtotal += total;
+        subtotal += lineSubtotal;
+        totalTaxAmount += taxAmount;
 
         saleItemsToCreate.push({
           productId: item.productId,
           quantity: item.quantity,
           unitPrice,
+          discount: itemDiscount,
           taxRate,
           taxAmount,
-          subtotal: total,
+          subtotal: lineSubtotal,
           total,
         });
       }
 
       // Compute totals
-      const totalAmount = subtotal; // Assuming no additional tax here, simple sum
+      const globalDiscount = data.discount ? Number(data.discount) : 0;
+      const totalAmount =
+        data.total !== undefined
+          ? Number(data.total)
+          : Math.max(0, subtotal + totalTaxAmount - globalDiscount);
 
       // d. Create Sale
       const sale = await tx.sale.create({
@@ -121,8 +123,9 @@ export class SalesService {
           userId,
           customerId: data.customerId,
           cashSessionId: data.cashSessionId,
-          subtotal,
-          taxAmount: 0,
+          subtotal: data.subtotal !== undefined ? Number(data.subtotal) : subtotal,
+          discount: globalDiscount,
+          taxAmount: data.taxAmount !== undefined ? Number(data.taxAmount) : totalTaxAmount,
           total: totalAmount,
           notes: data.notes,
           status: SaleStatus.COMPLETED,
@@ -131,6 +134,21 @@ export class SalesService {
           },
         },
       });
+
+      // c. Create StockMovement linked to sale.id
+      for (const item of data.items) {
+        await tx.stockMovement.create({
+          data: {
+            warehouseId: data.warehouseId,
+            productId: item.productId,
+            type: StockMovementType.SALE_OUT,
+            quantity: -item.quantity,
+            referenceId: sale.id,
+            userId,
+            notes: `Venta #${sale.number}`,
+          },
+        });
+      }
 
       // e. Handle Payments
       if (data.payments && data.payments.length > 0) {
@@ -158,35 +176,31 @@ export class SalesService {
                 methodId: method.id,
               },
             });
-          } else if (method && method.code === PaymentMethodCode.OTHER && data.customerId) {
-            // Need to handle cuenta corriente - simplistic assumption: OTHER is cuenta corriente
-            // For a robust system, we would have a specific CUENTA_CORRIENTE code.
-            // Let's check if the name is 'Cuenta Corriente' or similar.
-            // For this phase, any NON-CASH could potentially be Account if requested.
-            // Let's implement it for any method that is specifically for accounts or if custom logic applies.
-            // Here, we just follow: "If payment method is customer account / cuenta corriente..."
-            // As we don't have a specific enum for it, let's assume it's OTHER or based on customer balance.
-            // I'll leave this as a general check based on code or name.
-            if (method.name.toLowerCase().includes('cuenta corriente')) {
-               await tx.customerAccountMove.create({
-                 data: {
-                   customerId: data.customerId,
-                   type: 'INVOICE',
-                   amount: payment.amount,
-                   referenceId: sale.id,
-                   notes: `Venta #${sale.number}`,
-                 }
-               });
-               await tx.customer.update({
-                 where: { id: data.customerId },
-                 data: { balance: { increment: payment.amount } },
-               });
-            }
+          } else if (
+            method &&
+            data.customerId &&
+            (method.name.toLowerCase().includes('cuenta corriente') ||
+              (method.code as string) === 'ACCOUNT' ||
+              method.code === PaymentMethodCode.OTHER)
+          ) {
+            await tx.customerAccountMove.create({
+              data: {
+                customerId: data.customerId,
+                type: 'INVOICE',
+                amount: payment.amount,
+                referenceId: sale.id,
+                notes: `Venta #${sale.number}`,
+              },
+            });
+            await tx.customer.update({
+              where: { id: data.customerId },
+              data: { balance: { increment: payment.amount } },
+            });
           }
         }
       }
 
-      return this.getSale(sale.id);
+      return this.getSale(sale.id, tx);
     });
   }
 
@@ -207,23 +221,44 @@ export class SalesService {
         data: { status: SaleStatus.VOIDED },
       });
 
-      // Find stock warehouse from previous movement or assume single warehouse if not saved in sale.
-      // Since sale doesn't store warehouseId directly, we look up the stock movement for this sale.
-      // We can find warehouse from stockMovement or assume we revert to a default or find it.
-      // Actually, we can get warehouseId from stockMovement where notes/reference contains sale... wait, referenceId is not set.
-      // We'll have to find the warehouseId from the stock movement if it was linked, but it wasn't.
-      // Let's assume there's one main warehouse, or we can look up the first stock.
-      const firstMovement = await tx.stockMovement.findFirst({
-         where: { type: StockMovementType.SALE_OUT, userId: sale.userId, createdAt: { gte: sale.createdAt } } // Approximate
+      const refMovement = await tx.stockMovement.findFirst({
+        where: {
+          type: StockMovementType.SALE_OUT,
+          OR: [
+            { referenceId: sale.id },
+            { userId: sale.userId, createdAt: { gte: sale.createdAt } },
+          ],
+        },
+        orderBy: { createdAt: 'asc' },
       });
-      // A better way is to update the create sale to save referenceId = sale.id in stockMovement.
-      // But since we didn't, we will just increment the stock that is currently available.
 
       for (const item of sale.items) {
-        // Find stock. We don't have warehouseId, so find the first one or throw.
-        const stock = await tx.warehouseStock.findFirst({
-          where: { productId: item.productId }
+        const itemMovement = await tx.stockMovement.findFirst({
+          where: {
+            type: StockMovementType.SALE_OUT,
+            productId: item.productId,
+            OR: [
+              { referenceId: sale.id },
+              { userId: sale.userId, createdAt: { gte: sale.createdAt } },
+            ],
+          },
+          orderBy: { createdAt: 'asc' },
         });
+
+        const targetWarehouseId = itemMovement?.warehouseId || refMovement?.warehouseId;
+
+        const stock = targetWarehouseId
+          ? await tx.warehouseStock.findUnique({
+              where: {
+                warehouseId_productId: {
+                  warehouseId: targetWarehouseId,
+                  productId: item.productId,
+                },
+              },
+            })
+          : await tx.warehouseStock.findFirst({
+              where: { productId: item.productId },
+            });
 
         if (stock) {
           await tx.warehouseStock.update({
@@ -237,6 +272,7 @@ export class SalesService {
               productId: item.productId,
               type: StockMovementType.RETURN_IN,
               quantity: item.quantity,
+              referenceId: sale.id,
               userId,
               notes: `Anulación Venta #${sale.number}`,
             },
@@ -244,23 +280,51 @@ export class SalesService {
         }
       }
 
+      for (const payment of sale.payments) {
+        const isAccount =
+          payment.method.name.toLowerCase().includes('cuenta corriente') ||
+          (payment.method.code as string) === 'ACCOUNT' ||
+          payment.method.code === PaymentMethodCode.OTHER;
+
+        if (isAccount && sale.customerId) {
+          await tx.customerAccountMove.create({
+            data: {
+              customerId: sale.customerId,
+              type: 'NOTE',
+              amount: -Number(payment.amount),
+              referenceId: sale.id,
+              notes: `Anulación Venta #${sale.number}`,
+            },
+          });
+          await tx.customer.update({
+            where: { id: sale.customerId },
+            data: { balance: { decrement: payment.amount } },
+          });
+        }
+      }
+
       if (sale.cashSessionId) {
-        for (const payment of sale.payments) {
-          if (payment.method.code === PaymentMethodCode.CASH) {
-            await tx.cashMovement.create({
-              data: {
-                sessionId: sale.cashSessionId,
-                type: CashMovementType.REFUND,
-                amount: payment.amount,
-                description: `Anulación Venta #${sale.number}`,
-                methodId: payment.methodId,
-              },
-            });
+        const session = await tx.cashSession.findUnique({
+          where: { id: sale.cashSessionId },
+        });
+        if (session && session.status === 'OPEN') {
+          for (const payment of sale.payments) {
+            if (payment.method.code === PaymentMethodCode.CASH) {
+              await tx.cashMovement.create({
+                data: {
+                  sessionId: sale.cashSessionId,
+                  type: CashMovementType.REFUND,
+                  amount: payment.amount,
+                  description: `Anulación Venta #${sale.number}`,
+                  methodId: payment.methodId,
+                },
+              });
+            }
           }
         }
       }
 
-      return this.getSale(sale.id);
+      return this.getSale(sale.id, tx);
     });
   }
 }

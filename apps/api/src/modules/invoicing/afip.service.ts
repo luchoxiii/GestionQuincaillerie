@@ -45,7 +45,8 @@ export class AfipService {
       const lastInvoice = await this.prisma.invoice.findFirst({
         where: {
           salePointId: data.salePointId,
-          invoiceTypeId: data.invoiceTypeId
+          invoiceTypeId: data.invoiceTypeId,
+          number: { not: null }
         },
         orderBy: { number: 'desc' }
       });

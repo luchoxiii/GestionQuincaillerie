@@ -20,13 +20,22 @@ export class SettingsService implements OnModuleInit {
 
   async updateSettings(data: Record<string, string>) {
     const defaultGroup = 'general';
-    for (const [key, value] of Object.entries(data)) {
+    const entries = Object.entries(data || {});
+    if (entries.length > 100) {
+      throw new Error('Límite de claves excedido en actualización de configuración');
+    }
+
+    for (const [key, value] of entries) {
+      if (!key || typeof key !== 'string' || key.length > 100 || !/^[a-zA-Z0-9_.-]+$/.test(key)) {
+        continue; // Discard invalid or dangerous keys (OWASP A03 / A04)
+      }
+      const safeValue = String(value || '').slice(0, 10000);
       await this.prisma.setting.upsert({
         where: { key },
-        update: { value: String(value) },
+        update: { value: safeValue },
         create: {
           key,
-          value: String(value),
+          value: safeValue,
           group: defaultGroup,
         },
       });

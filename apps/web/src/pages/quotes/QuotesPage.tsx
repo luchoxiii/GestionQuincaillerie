@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useQuotes,
   useUpdateQuoteStatus,
@@ -45,14 +45,22 @@ import toast from 'react-hot-toast';
 
 export function QuotesPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { data: quotes = [], isLoading } = useQuotes();
   const { data: customersData } = useCustomers({ limit: 100 });
   const updateStatus = useUpdateQuoteStatus();
   const updateExchangeRate = useUpdateQuoteExchangeRate();
   const { loadQuoteToCart } = usePosStore();
 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || '');
   const [activeTab, setActiveTab] = useState<'ALL' | 'ACTIVE' | 'ACCEPTED' | 'CONVERTED' | 'EXPIRED'>('ALL');
+
+  useEffect(() => {
+    const querySearch = searchParams.get('search');
+    if (querySearch !== null) {
+      setSearchTerm(querySearch);
+    }
+  }, [searchParams]);
 
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [selectedQuoteForPrint, setSelectedQuoteForPrint] = useState<Quote | null>(null);

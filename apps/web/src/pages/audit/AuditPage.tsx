@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -36,6 +36,7 @@ export default function AuditPage() {
   const [search, setSearch] = useState('');
   const [verification, setVerification] = useState<ReturnType<typeof verifyLedgerIntegrity> | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const verifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: logs = [], isLoading } = useAuditLogs({
     entity: entityFilter !== 'all' ? entityFilter : undefined,
@@ -48,11 +49,22 @@ export default function AuditPage() {
   useEffect(() => {
     const res = verifyLedgerIntegrity();
     setVerification(res);
-  }, [logs.length]);
+  }, [logs]);
+
+  useEffect(() => {
+    return () => {
+      if (verifyTimeoutRef.current) {
+        clearTimeout(verifyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleManualVerification = () => {
     setIsVerifying(true);
-    setTimeout(() => {
+    if (verifyTimeoutRef.current) {
+      clearTimeout(verifyTimeoutRef.current);
+    }
+    verifyTimeoutRef.current = setTimeout(() => {
       const res = verifyLedgerIntegrity();
       setVerification(res);
       setIsVerifying(false);
@@ -118,6 +130,8 @@ export default function AuditPage() {
       case 'Sale': return 'Venta';
       case 'User': return 'Usuario';
       case 'Invoice': return 'Factura';
+      case 'Cash': return 'Caja';
+      case 'Store': return 'Configuración';
       case 'Customer': return 'Cliente';
       case 'Purchase': return 'Compra';
       case 'Stock': return 'Inventario';
@@ -168,10 +182,12 @@ export default function AuditPage() {
     
     // Add audit log for CSV export
     try {
+      const currentUser = useAuthStore.getState().user;
       recordAuditLog({
-        userId: isAdmin ? 'admin' : 'unknown',
-        user: isAdmin ? 'Administrador Principal' : 'Usuario',
-        role: isAdmin ? 'ADMIN' : 'USER',
+        userId: currentUser?.id || (isAdmin ? 'u-admin' : 'unknown'),
+        username: currentUser?.username || (isAdmin ? 'admin' : 'unknown'),
+        user: currentUser?.name || (isAdmin ? 'Administrador Principal' : 'Usuario'),
+        role: currentUser?.role || (isAdmin ? 'ADMIN' : 'USER'),
         action: 'CSV_EXPORT',
         entity: 'AuditLog',
         entityId: 'ALL',
@@ -405,10 +421,13 @@ export default function AuditPage() {
                 <SelectContent>
                   <SelectItem value="all">Todas las Entidades</SelectItem>
                   <SelectItem value="Sale">Ventas</SelectItem>
+                  <SelectItem value="Invoice">Facturas</SelectItem>
+                  <SelectItem value="Cash">Caja</SelectItem>
                   <SelectItem value="Customer">Clientes</SelectItem>
                   <SelectItem value="Product">Productos</SelectItem>
                   <SelectItem value="Purchase">Compras</SelectItem>
                   <SelectItem value="Stock">Inventario</SelectItem>
+                  <SelectItem value="Store">Configuración</SelectItem>
                   <SelectItem value="User">Usuarios</SelectItem>
                 </SelectContent>
               </Select>

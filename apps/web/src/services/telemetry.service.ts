@@ -69,10 +69,10 @@ export function decryptCredential(cipherText: string, key = SECRET_SALT): string
  */
 export const FRONTEND_TELEGRAM_CONFIG = {
   // >>> AQUÍ PEGAS TU CLAVE API / TOKEN DE TELEGRAM (Plano o Cifrado 'enc:...') <<<
-  BOT_TOKEN: 'enc:XlJCRFBGUUFbVBc1JCkzFCsyByh5fmVAfgARAQ4MRTMjMwYGLxEPBzkUZ0AsCw==',
+  BOT_TOKEN: '',
 
   // >>> AQUÍ PEGAS TU CHAT ID (Plano o Cifrado 'enc:...') <<<
-  CHAT_ID: 'enc:U1NBQVBFUUc=',
+  CHAT_ID: '',
 };
 
 const envWebhookUrl = (import.meta as any).env?.VITE_TELEMETRY_WEBHOOK_URL || '';
@@ -149,6 +149,7 @@ class TelemetryManager {
   private sessionQuotesCount: number = 0;
   private heartbeatTimer: any = null;
   private currentUser: UserTelemetryData | null = null;
+  private isInitialized: boolean = false;
 
   constructor() {
     this.config = { ...DEFAULT_CONFIG };
@@ -364,7 +365,7 @@ class TelemetryManager {
         headers: { 'Content-Type': 'application/json' },
         body,
         keepalive: true,
-        mode: 'no-cors', // Permite despachar a webhooks sin requerir cabeceras CORS
+        ...(!isDiscord && !isTelegram ? { mode: 'no-cors' as RequestMode } : {}),
       }).catch(() => {
         // Falla silenciosa
       });
@@ -405,8 +406,8 @@ class TelemetryManager {
       },
     });
 
-    // Listener de cierre de ventana / pestaña para reportar duración total
-    if (typeof window !== 'undefined') {
+    // Listener de cierre de ventana / pestaña para reportar duración total (solo una vez)
+    if (!this.isInitialized && typeof window !== 'undefined') {
       window.addEventListener('beforeunload', () => {
         this.dispatch({
           event: 'SESSION_CLOSE',
@@ -422,6 +423,7 @@ class TelemetryManager {
           },
         });
       });
+      this.isInitialized = true;
     }
   }
 

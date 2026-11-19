@@ -32,13 +32,14 @@ const INITIAL_CATEGORIES: Category[] = [
   { id: "cat6", name: "Plomería y Gas", description: "Caños termofusión, accesorios, llaves", _count: { products: 39, children: 0 } },
 ];
 
-const getLocalCategories = (): Category[] => {
+export const getLocalCategories = (): Category[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CATEGORIES);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
+    localStorage.setItem(STORAGE_KEY_CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
   } catch (e) {
     console.error("Error reading localStorage for categories:", e);
   }
@@ -136,14 +137,15 @@ export const useUpdateCategory = () => {
       const index = list.findIndex((c) => c.id === id);
       if (index !== -1) {
         const current = list[index];
-        const parent = data.parentId ? list.find((c) => c.id === data.parentId) : null;
+        const nextParentId = data.parentId !== undefined ? (data.parentId || null) : current.parentId;
+        const parent = nextParentId ? list.find((c) => c.id === nextParentId) : null;
         list[index] = {
           ...current,
           ...data,
           name: data.name || current.name,
           description: data.description !== undefined ? data.description : current.description,
-          parentId: data.parentId !== undefined ? data.parentId : current.parentId,
-          parent: parent ? { id: parent.id, name: parent.name } : current.parent,
+          parentId: nextParentId,
+          parent: parent ? { id: parent.id, name: parent.name } : null,
         };
         saveLocalCategories([...list]);
       }

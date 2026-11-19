@@ -90,14 +90,64 @@ export default function PurchasesPage() {
       </Card>
 
       <Dialog open={!!selectedPurchase} onOpenChange={() => setSelectedPurchase(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Detalle de Compra: {selectedPurchase?.purchaseNumber}</DialogTitle></DialogHeader>
-          <div className="py-4 space-y-2">
-            <p><strong>Proveedor:</strong> {selectedPurchase?.supplier}</p>
-            <p><strong>Factura:</strong> {selectedPurchase?.invoiceNumber}</p>
-            <p><strong>Total:</strong> ${Number(selectedPurchase?.total || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
-            <div className="mt-4 p-4 bg-muted rounded-md text-sm">
-              <p>Los ítems de la compra aparecerían aquí.</p>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Detalle de Compra: {selectedPurchase?.purchaseNumber}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-2 p-3 rounded-lg bg-muted/50 border">
+              <p><strong>Proveedor:</strong> {selectedPurchase?.supplier}</p>
+              <p><strong>Factura / Remito:</strong> {selectedPurchase?.invoiceNumber || '-'}</p>
+              <p>
+                <strong>Fecha:</strong>{' '}
+                {selectedPurchase?.date ? new Date(selectedPurchase.date).toLocaleDateString('es-AR') : '-'}
+              </p>
+              <p>
+                <strong>Estado:</strong>{' '}
+                {selectedPurchase?.status === 'COMPLETED' ? 'Completado' : 'Pendiente'}
+              </p>
+            </div>
+            <div className="rounded-md border overflow-hidden">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-muted text-muted-foreground">
+                  <tr>
+                    <th className="p-2 font-medium">Producto</th>
+                    <th className="p-2 font-medium text-center">Cant.</th>
+                    <th className="p-2 font-medium text-right">Costo Unit.</th>
+                    <th className="p-2 font-medium text-right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {Array.isArray(selectedPurchase?.items) && selectedPurchase.items.length > 0 ? (
+                    selectedPurchase.items.map((it: any, idx: number) => {
+                      const qty = Number(it.quantity || 1);
+                      const cost = Number(it.unitCost ?? it.costPrice ?? it.unitPrice ?? 0);
+                      const sub = Number(it.subtotal ?? qty * cost);
+                      return (
+                        <tr key={it.id || it.productId || idx}>
+                          <td className="p-2 font-medium">
+                            {it.productName || it.product?.name || it.name || `Artículo #${idx + 1}`}
+                          </td>
+                          <td className="p-2 text-center">{qty}</td>
+                          <td className="p-2 text-right">${cost.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2 text-right font-semibold">${sub.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="p-3 text-center text-muted-foreground">
+                        Orden global recepcionada por ${Number(selectedPurchase?.total || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end pt-2 border-t">
+              <p className="text-base font-bold">
+                Total: ${Number(selectedPurchase?.total || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+              </p>
             </div>
           </div>
         </DialogContent>

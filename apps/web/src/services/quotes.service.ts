@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
+import { exportToCsv } from '@/lib/utils';
 
 export type QuoteStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'EXPIRED' | 'CONVERTED' | 'CANCELLED';
 
@@ -554,8 +555,9 @@ export function useUpdateQuoteExchangeRate() {
 
   return useMutation({
     mutationFn: async ({ id, newExchangeRate }: { id: string; newExchangeRate: number }) => {
+      const safeRate = !newExchangeRate || isNaN(newExchangeRate) || newExchangeRate <= 0 ? 1 : newExchangeRate;
       try {
-        await api.patch(`/quotes/${id}/exchange-rate`, { exchangeRate: newExchangeRate });
+        await api.patch(`/quotes/${id}/exchange-rate`, { exchangeRate: safeRate });
       } catch (e) {
         // Fallback
       }
@@ -565,18 +567,18 @@ export function useUpdateQuoteExchangeRate() {
         if (q.id === id) {
           const totalSecondary =
             q.currency === 'USD'
-              ? Math.round(q.total * newExchangeRate * 100) / 100
-              : Math.round((q.total / newExchangeRate) * 100) / 100;
+              ? Math.round(q.total * safeRate * 100) / 100
+              : Math.round((q.total / safeRate) * 100) / 100;
           return {
             ...q,
-            exchangeRate: newExchangeRate,
+            exchangeRate: safeRate,
             totalSecondary,
           };
         }
         return q;
       });
       saveStoredQuotes(updated);
-      return { id, newExchangeRate };
+      return { id, newExchangeRate: safeRate };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quotes'] });
@@ -720,30 +722,23 @@ export function exportQuotesCsv(quotes: Quote[]) {
   ];
 
   const rows = quotes.map((q) => [
-    `"${q.number}"`,
-    `"${new Date(q.createdAt).toLocaleDateString('es-AR')}"`,
-    `"${new Date(q.validUntil).toLocaleString('es-AR')}"`,
-    `"${q.status}"`,
-    `"${q.customerName.replace(/"/g, '""')}"`,
-    `"${q.customerDocument || ''}"`,
-    `"${q.customerPhone || ''}"`,
-    `"${q.currency || 'ARS'}"`,
+    q.number,
+    new Date(q.createdAt).toLocaleDateString('es-AR'),
+    new Date(q.validUntil).toLocaleString('es-AR'),
+    q.status,
+    q.customerName,
+    q.customerDocument || '',
+    q.customerPhone || '',
+    q.currency || 'ARS',
     q.exchangeRate || 1350,
     q.items.length,
-    q.subtotal.toFixed(2),
-    q.discountTotal.toFixed(2),
-    q.taxTotal.toFixed(2),
-    q.total.toFixed(2),
-    (q.totalSecondary || 0).toFixed(2),
-    `"${q.convertedSaleId || ''}"`,
+    Number(q.subtotal.toFixed(2)),
+    Number(q.discountTotal.toFixed(2)),
+    Number(q.taxTotal.toFixed(2)),
+    Number(q.total.toFixed(2)),
+    Number((q.totalSecondary || 0).toFixed(2)),
+    q.convertedSaleId || '',
   ]);
 
-  const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement('a');
-  link.setAttribute('href', encodedUri);
-  link.setAttribute('download', `presupuestos_${new Date().toISOString().slice(0, 10)}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  exportToCsv(`presupuestos_${new Date().toISOString().slice(0, 10)}`, [headers, ...rows]);
 }

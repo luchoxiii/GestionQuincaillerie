@@ -177,8 +177,11 @@ async function main() {
   // 11. Invoice Types
   const invoiceTypes = [
     { code: '001', name: 'Factura A', letter: 'A' },
+    { code: '003', name: 'Nota de Crédito A', letter: 'A' },
     { code: '006', name: 'Factura B', letter: 'B' },
-    { code: '011', name: 'Factura C', letter: 'C' }
+    { code: '008', name: 'Nota de Crédito B', letter: 'B' },
+    { code: '011', name: 'Factura C', letter: 'C' },
+    { code: '013', name: 'Nota de Crédito C', letter: 'C' }
   ];
 
   for (const it of invoiceTypes) {

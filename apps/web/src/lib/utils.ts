@@ -73,14 +73,18 @@ export function formatCurrency(
   }
 }
 
-export function exportToCsv(filename: string, rows: (string | number | boolean | null | undefined)[][]) {
-  const escapeCell = (cell: any) => {
-    if (cell === null || cell === undefined) return '""';
-    const str = String(cell).replace(/"/g, '""');
-    return `"${str}"`;
-  };
+export function sanitizeCsvCell(cell: any): string {
+  if (cell === null || cell === undefined) return '""';
+  let str = String(cell).replace(/"/g, '""');
+  // OWASP A03 / CWE-1236: Prevenir inyección de fórmulas CSV / ejecución de macros DDE en Excel/Calc
+  if (/^[=+\-@\t\r]/.test(str) || /^\s+[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  return `"${str}"`;
+}
 
-  const csvContent = '\uFEFF' + rows.map(row => row.map(escapeCell).join(';')).join('\r\n');
+export function exportToCsv(filename: string, rows: (string | number | boolean | null | undefined)[][]) {
+  const csvContent = '\uFEFF' + rows.map(row => row.map(sanitizeCsvCell).join(';')).join('\r\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -97,6 +101,7 @@ export function exportToCsv(filename: string, rows: (string | number | boolean |
     if (user && !filename.includes('bitacora_forense')) {
       recordAuditLog({
         userId: user.id,
+        username: user.username || 'admin',
         user: user.name,
         role: user.role,
         action: 'CSV_EXPORT',

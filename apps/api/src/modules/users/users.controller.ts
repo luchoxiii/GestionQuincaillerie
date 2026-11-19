@@ -2,6 +2,8 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } fro
 import { UsersService } from './users.service';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto, AssignRolesDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
@@ -30,28 +32,28 @@ export class UsersController {
   @Post()
   @RequirePermissions('users.create')
   @ApiOperation({ summary: 'Create new user' })
-  create(@Body() data: any) {
+  create(@Body() data: CreateUserDto) {
     return this.usersService.create(data);
   }
 
   @Put(':id')
   @RequirePermissions('users.edit')
   @ApiOperation({ summary: 'Update user' })
-  update(@Param('id') id: string, @Body() data: any) {
+  update(@Param('id') id: string, @Body() data: UpdateUserDto) {
     return this.usersService.update(id, data);
   }
 
   @Delete(':id')
-  @RequirePermissions('users.delete')
+  @RequirePermissions('users.edit')
   @ApiOperation({ summary: 'Delete user' })
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
   }
 
   @Put(':id/roles')
-  @RequirePermissions('users.edit')
+  @RequirePermissions('users.permissions')
   @ApiOperation({ summary: 'Assign roles to user' })
-  assignRoles(@Param('id') id: string, @Body() data: { roleIds: string[] }) {
+  assignRoles(@Param('id') id: string, @Body() data: AssignRolesDto) {
     return this.usersService.assignRoles(id, data.roleIds);
   }
 }
@@ -64,7 +66,7 @@ export class RolesController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  @RequirePermissions('roles.view')
+  @RequirePermissions('users.view')
   @ApiOperation({ summary: 'List all roles' })
   findAll() {
     return this.usersService.findAllRoles();

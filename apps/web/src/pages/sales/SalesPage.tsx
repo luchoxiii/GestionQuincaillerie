@@ -101,7 +101,11 @@ export function SalesPage() {
       const currentSeller = s.sellerName || s.user?.name || 'Administrador Principal';
       const matchesSeller = selectedSeller === 'all' || currentSeller === selectedSeller;
 
-      const matchesStatus = selectedStatus === 'all' || s.status === selectedStatus;
+      const matchesStatus =
+        selectedStatus === 'all' ||
+        (selectedStatus === 'VOIDED'
+          ? s.status === 'VOIDED' || s.status === 'CANCELLED'
+          : s.status === selectedStatus);
       
       const matchesFiscal = selectedFiscal === 'all' || (s.fiscalType || 'BLANCO') === selectedFiscal;
 
@@ -130,7 +134,7 @@ export function SalesPage() {
   const totalRevenue = completedSales.reduce((acc: number, s: any) => acc + (Number(s.total) || 0), 0);
   const totalCompletedCount = completedSales.length;
   const averageTicket = totalCompletedCount > 0 ? totalRevenue / totalCompletedCount : 0;
-  const voidedSalesCount = filteredSales.filter((s: any) => s.status === 'VOIDED').length;
+  const voidedSalesCount = filteredSales.filter((s: any) => s.status === 'VOIDED' || s.status === 'CANCELLED').length;
 
   const handleVoidSale = async (id: string) => {
     if (confirm('¿Está seguro de que desea anular esta venta? Esta acción no se puede deshacer.')) {
@@ -247,7 +251,7 @@ export function SalesPage() {
         Number(s.discount || 0).toFixed(2),
         Number(s.taxAmount || 0).toFixed(2),
         Number(s.total || 0).toFixed(2),
-        s.status === 'COMPLETED' ? 'Completada' : s.status === 'VOIDED' ? 'Anulada' : s.status,
+        s.status === 'COMPLETED' ? 'Completada' : (s.status === 'VOIDED' || s.status === 'CANCELLED') ? 'Anulada' : s.status,
         s.shippingMethod || '-',
         s.shippingStatus || '-',
         s.trackingNumber || '-',
@@ -601,8 +605,8 @@ export function SalesPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={sale.status === 'COMPLETED' ? 'default' : sale.status === 'VOIDED' ? 'destructive' : 'secondary'}>
-                        {sale.status === 'COMPLETED' ? 'Completada' : sale.status === 'VOIDED' ? 'Anulada' : sale.status}
+                      <Badge variant={sale.status === 'COMPLETED' ? 'default' : (sale.status === 'VOIDED' || sale.status === 'CANCELLED') ? 'destructive' : 'secondary'}>
+                        {sale.status === 'COMPLETED' ? 'Completada' : (sale.status === 'VOIDED' || sale.status === 'CANCELLED') ? 'Anulada' : sale.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -621,7 +625,7 @@ export function SalesPage() {
                         <Button variant="ghost" size="icon" title="Ver detalle completo" onClick={() => setSelectedSale(sale)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        {sale.status !== 'VOIDED' && (
+                        {sale.status !== 'VOIDED' && sale.status !== 'CANCELLED' && (
                           <Button
                             variant="ghost"
                             size="icon"

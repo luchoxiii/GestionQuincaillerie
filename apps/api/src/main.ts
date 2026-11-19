@@ -67,7 +67,7 @@ async function bootstrap() {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('Bloqueado por política CORS'));
+        callback(null, false);
       }
     },
     credentials: true,

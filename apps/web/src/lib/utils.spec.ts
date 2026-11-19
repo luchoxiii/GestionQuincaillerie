@@ -119,4 +119,25 @@ describe('Utils & Multi-Currency Engine 🪙', () => {
       expect(result).toContain('text-white');
     });
   });
+
+  describe('OWASP A03 / CWE-1236: Protección contra CSV Formula Injection', () => {
+    it('debería neutralizar fórmulas maliciosas anteponiendo comilla simple', async () => {
+      const { sanitizeCsvCell } = await import('./utils');
+      
+      expect(sanitizeCsvCell('=SUM(A1:A10)')).toBe('"\'=SUM(A1:A10)"');
+      expect(sanitizeCsvCell('+12345')).toBe('"\' +12345"'.replace(' ', ''));
+      expect(sanitizeCsvCell('-cmd|\'/C calc\'!A0')).toBe('"\' -cmd|\'/C calc\'!A0"'.replace(' ', ''));
+      expect(sanitizeCsvCell('@HYPERLINK("evil.com")')).toBe('"\'@HYPERLINK(""evil.com"")"');
+      expect(sanitizeCsvCell('  =ALERT()')).toBe('"\'  =ALERT()"');
+    });
+
+    it('debería manejar celdas normales, nulas o números sin alteración indebida', async () => {
+      const { sanitizeCsvCell } = await import('./utils');
+      
+      expect(sanitizeCsvCell('Tornillo Parker 1/2')).toBe('"Tornillo Parker 1/2"');
+      expect(sanitizeCsvCell(1500)).toBe('"1500"');
+      expect(sanitizeCsvCell(null)).toBe('""');
+      expect(sanitizeCsvCell(undefined)).toBe('""');
+    });
+  });
 });

@@ -43,15 +43,34 @@ export function UserBitacoraModal({ isOpen, onClose, user }: UserBitacoraModalPr
   const [entityFilter, setEntityFilter] = useState('all');
   const [selectedLogForDetails, setSelectedLogForDetails] = useState<AuditLog | null>(null);
 
-  // Load audit logs specifically for this user
-  const { data: logs = [], isLoading } = useUserAuditLogs(
-    user ? user.username : undefined,
-    {
-      action: actionFilter,
-      entity: entityFilter,
-      search: searchTerm,
-    }
+  // Load audit logs specifically for this user (matching by id, username, and full name)
+  const fullName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : undefined;
+  const filterParams = {
+    action: actionFilter,
+    entity: entityFilter,
+    search: searchTerm,
+  };
+  const { data: logsById = [], isLoading: isLoadingById } = useUserAuditLogs(
+    user ? user.id : undefined,
+    filterParams
   );
+  const { data: logsByUsername = [], isLoading: isLoadingByUsername } = useUserAuditLogs(
+    user ? user.username : undefined,
+    filterParams
+  );
+  const { data: logsByName = [], isLoading: isLoadingByName } = useUserAuditLogs(
+    fullName || undefined,
+    filterParams
+  );
+
+  const isLoading = isLoadingById || isLoadingByUsername || isLoadingByName;
+  const logs = useMemo(() => {
+    const map = new Map<string, AuditLog>();
+    [...logsById, ...logsByUsername, ...logsByName].forEach((l) => {
+      map.set(l.id, l);
+    });
+    return Array.from(map.values()).sort((a, b) => (b.sequence || 0) - (a.sequence || 0));
+  }, [logsById, logsByUsername, logsByName]);
 
   // Calculate user specific metrics
   const totalEvents = logs.length;

@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
+import { recordAuditLog } from './audit.service';
+import { useAuthStore } from '@/stores/auth.store';
 
 export interface Supplier {
   id: string;
@@ -18,20 +20,21 @@ const INITIAL_SUPPLIERS: Supplier[] = [
   { id: '2', name: 'Herramientas del Sur SRL', cuit: '33-87654321-9', taxCondition: 'Responsable Inscripto', phone: '11-4321-0098', debtBalance: 0 },
 ];
 
-const getLocalSuppliers = (): Supplier[] => {
+export const getLocalSuppliers = (): Supplier[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_SUPPLIERS);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
+    localStorage.setItem(STORAGE_KEY_SUPPLIERS, JSON.stringify(INITIAL_SUPPLIERS));
   } catch (e) {
     console.error('Error reading localStorage for suppliers:', e);
   }
   return INITIAL_SUPPLIERS;
 };
 
-const saveLocalSuppliers = (suppliers: Supplier[]) => {
+export const saveLocalSuppliers = (suppliers: Supplier[]) => {
   try {
     localStorage.setItem(STORAGE_KEY_SUPPLIERS, JSON.stringify(suppliers));
   } catch (e) {
@@ -155,10 +158,47 @@ export const useSupplierAccount = (id: string) => {
   return useQuery({
     queryKey: ['supplierAccount', id],
     queryFn: async () => {
-      return [
-        { id: 'mov1', date: '2023-09-01', type: 'COMPRA', amount: 50000, description: 'Factura A-0001-00001234' },
-        { id: 'mov2', date: '2023-09-10', type: 'PAGO', amount: -20000, description: 'Transferencia Bancaria' },
-      ];
+      const moves: any[] = [];
+      try {
+        const purchasesRaw = localStorage.getItem('ferreteria_local_purchases');
+        const purchases = purchasesRaw ? JSON.parse(purchasesRaw) : [];
+        for (const p of purchases) {
+          if (p.supplierId === id && p.status !== 'CANCELLED') {
+            moves.push({
+              id: p.id,
+              date: p.date || new Date().toISOString().split('T')[0],
+              type: 'COMPRA',
+              amount: Number(p.total || 0),
+              description: `Compra ${p.purchaseNumber} (Fact. ${p.invoiceNumber || 'S/N'})`,
+            });
+          }
+        }
+      } catch {}
+
+      try {
+        const supMovesRaw = localStorage.getItem('ferreteria_local_supplier_moves');
+        const supMoves = supMovesRaw ? JSON.parse(supMovesRaw) : [];
+        for (const m of supMoves) {
+          if (m.supplierId === id) {
+            moves.push({
+              id: m.id,
+              date: m.date || new Date().toISOString().split('T')[0],
+              type: 'PAGO',
+              amount: -Number(m.amount || 0),
+              description: `${m.method || 'Pago'}${m.reference ? ` (${m.reference})` : ''}`,
+            });
+          }
+        }
+      } catch {}
+
+      if (moves.length === 0) {
+        return [
+          { id: 'mov1', date: '2023-09-01', type: 'COMPRA', amount: 50000, description: 'Factura A-0001-00001234' },
+          { id: 'mov2', date: '2023-09-10', type: 'PAGO', amount: -20000, description: 'Transferencia Bancaria' },
+        ];
+      }
+
+      return moves.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     },
     enabled: !!id,
   });
@@ -175,16 +215,69 @@ export const useRecordSupplierPayment = () => {
         console.warn('Backend offline, recording supplier payment locally');
         const list = getLocalSuppliers();
         const index = list.findIndex((s) => s.id === payload.supplierId);
+        let supplierName = 'Proveedor';
         if (index !== -1) {
-          list[index].debtBalance = Math.max(0, list[index].debtBalance - payload.amount);
+          supplierName = list[index].name;
+          list[index].debtBalance = Math.max(0, list[index].debtBalance - Number(payload.amount || 0));
           saveLocalSuppliers([...list]);
         }
+
+        // Persist supplier payment history
+        try {
+          const supMovesRaw = localStorage.getItem('ferreteria_local_supplier_moves');
+          const supMoves = supMovesRaw ? JSON.parse(supMovesRaw) : [];
+          supMoves.unshift({
+            id: 'smov-' + Date.now(),
+            supplierId: payload.supplierId,
+            supplierName,
+            amount: Number(payload.amount || 0),
+            method: payload.method,
+            date: payload.date || new Date().toISOString().split('T')[0],
+            reference: payload.reference || '',
+          });
+          localStorage.setItem('ferreteria_local_supplier_moves', JSON.stringify(supMoves));
+        } catch {}
+
+        // If paid in Cash, record cash OUT movement
+        if (payload.method === 'Efectivo' || payload.method === 'CASH') {
+          try {
+            const cashRaw = localStorage.getItem('ferreteria_local_cash_session');
+            const activeSession = cashRaw ? JSON.parse(cashRaw) : null;
+            const movsRaw = localStorage.getItem('ferreteria_local_cash_movements');
+            const movs = movsRaw ? JSON.parse(movsRaw) : [];
+            movs.unshift({
+              id: 'mov-sup-' + Date.now(),
+              sessionId: activeSession?.id || 'sess-local',
+              type: 'OUT',
+              amount: Number(payload.amount || 0),
+              description: `Pago a proveedor ${supplierName}${payload.reference ? ` (${payload.reference})` : ''}`,
+              createdAt: new Date().toISOString(),
+            });
+            localStorage.setItem('ferreteria_local_cash_movements', JSON.stringify(movs));
+          } catch {}
+        }
+
+        const currentUser = useAuthStore.getState().user;
+        recordAuditLog({
+          userId: currentUser?.id || 'u-encargado',
+          username: currentUser?.username || 'encargado',
+          user: currentUser?.name || 'Encargado',
+          role: currentUser?.role || 'ENCARGADO',
+          action: 'UPDATE',
+          entity: 'Supplier',
+          entityId: payload.supplierId,
+          description: `Registró pago a proveedor ${supplierName} por $${Number(payload.amount || 0).toLocaleString()} (${payload.method})`,
+          details: payload,
+        });
+
         return { success: true };
       }
     },
     onSuccess: (_, { supplierId }) => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.invalidateQueries({ queryKey: ['supplierAccount', supplierId] });
+      queryClient.invalidateQueries({ queryKey: ['cash-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-movements'] });
     },
   });
 };

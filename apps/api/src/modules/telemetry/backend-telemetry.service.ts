@@ -3,15 +3,36 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as os from 'os';
 
-function isValidSafeUrl(urlString: string): boolean {
+export function isValidSafeUrl(urlString: string): boolean {
   try {
     const parsed = new URL(urlString);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    
+    // OWASP A10 / CWE-918: Disallow credentials and non-web ports for SSRF prevention
+    if (parsed.username || parsed.password) return false;
+    if (parsed.port && parsed.port !== '80' && parsed.port !== '443') return false;
+
     const hostname = parsed.hostname.toLowerCase();
     if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname === '[::1]' ||
+      hostname === '::1' ||
       hostname === '169.254.169.254' ||
       hostname === 'metadata.google.internal' ||
-      hostname.endsWith('.internal')
+      hostname.endsWith('.internal') ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.nip.io') ||
+      hostname.endsWith('.sslip.io') ||
+      /^\d+$/.test(hostname) ||
+      /^0x/i.test(hostname) ||
+      /^127\./.test(hostname) ||
+      /^10\./.test(hostname) ||
+      /^192\.168\./.test(hostname) ||
+      /^169\.254\./.test(hostname) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
     ) {
       return false;
     }
@@ -53,15 +74,16 @@ export function decryptCredential(cipherText: string, key = SECRET_SALT): string
  */
 export const BACKEND_TELEGRAM_CONFIG = {
   // >>> AQUÍ PEGAS TU CLAVE API / TOKEN DE TELEGRAM (Plano o Cifrado 'enc:...') <<<
-  BOT_TOKEN: 'enc:XlJCRFBGUUFbVBc1JCkzFCsyByh5fmVAfgARAQ4MRTMjMwYGLxEPBzkUZ0AsCw==',
+  BOT_TOKEN: '',
 
   // >>> AQUÍ PEGAS TU CHAT ID (Plano o Cifrado 'enc:...') <<<
-  CHAT_ID: 'enc:U1NBQVBFUUc=',
+  CHAT_ID: '',
 };
 
 @Injectable()
 export class BackendTelemetryService implements OnModuleInit, OnModuleDestroy {
   private timer: NodeJS.Timeout | null = null;
+  private bootTimer: NodeJS.Timeout | null = null;
   private readonly webhookUrl: string;
   private readonly instanceId: string;
 
@@ -93,20 +115,33 @@ export class BackendTelemetryService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    this.onModuleDestroy();
+
     // Report server startup silently
-    setTimeout(() => {
+    this.bootTimer = setTimeout(() => {
       this.sendServerReport('SERVER_BOOT').catch(() => {});
     }, 5000);
+    if (typeof this.bootTimer.unref === 'function') {
+      this.bootTimer.unref();
+    }
 
     // Heartbeat every 6 hours
     this.timer = setInterval(() => {
       this.sendServerReport('SERVER_HEARTBEAT').catch(() => {});
     }, 6 * 3600 * 1000);
+    if (typeof this.timer.unref === 'function') {
+      this.timer.unref();
+    }
   }
 
   onModuleDestroy() {
+    if (this.bootTimer) {
+      clearTimeout(this.bootTimer);
+      this.bootTimer = null;
+    }
     if (this.timer) {
       clearInterval(this.timer);
+      this.timer = null;
     }
   }
 

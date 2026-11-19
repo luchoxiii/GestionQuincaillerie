@@ -120,7 +120,7 @@ const normalizeCustomer = (c: any): Customer => {
   } as Customer;
 };
 
-const getLocalCustomers = (): Customer[] => {
+export const getLocalCustomers = (): Customer[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CUSTOMERS);
     if (raw) {
@@ -129,13 +129,16 @@ const getLocalCustomers = (): Customer[] => {
         return parsed.map(normalizeCustomer);
       }
     }
+    const seeded = INITIAL_CUSTOMERS.map(normalizeCustomer);
+    localStorage.setItem(STORAGE_KEY_CUSTOMERS, JSON.stringify(seeded));
+    return seeded;
   } catch (e) {
     console.error('Error reading localStorage for customers:', e);
   }
   return INITIAL_CUSTOMERS.map(normalizeCustomer);
 };
 
-const saveLocalCustomers = (customers: Customer[]) => {
+export const saveLocalCustomers = (customers: Customer[]) => {
   try {
     localStorage.setItem(STORAGE_KEY_CUSTOMERS, JSON.stringify(customers));
   } catch (e) {
@@ -160,7 +163,10 @@ export const useCustomers = (filters?: CustomerFilters) => {
         // Backend offline, fallback to browser storage
       }
 
-      let local = getLocalCustomers();
+      let local = getLocalCustomers().filter((c: any) => c.isActive !== false);
+      if (filters?.taxCondition && filters.taxCondition !== 'all') {
+        local = local.filter((c: any) => c.taxCondition === filters.taxCondition);
+      }
       if (filters?.search) {
         local = local.filter((c: any) => matchCustomerNatural(c, filters.search!));
       }
@@ -215,13 +221,64 @@ export const useCustomerAccount = (id: string | null) => {
       } catch (err) {
         const list = getLocalCustomers();
         const customer = list.find((c: any) => c.id === id) || ({} as Customer);
+        const currentBal = Number((customer as any).currentBalance ?? customer.balance ?? 0);
+
+        const transactions: CustomerTransaction[] = [];
+        try {
+          const salesRaw = localStorage.getItem('ferreteria_local_sales');
+          const sales = salesRaw ? JSON.parse(salesRaw) : [];
+          for (const s of sales) {
+            if (s.customerId === id && s.status !== 'VOIDED' && s.status !== 'CANCELLED') {
+              transactions.push({
+                id: s.id,
+                date: s.createdAt || new Date().toISOString(),
+                type: 'SALE',
+                reference: s.invoiceNumber || s.saleNumber || 'Venta',
+                debit: Number(s.total || 0),
+                credit: 0,
+                balance: currentBal,
+              });
+            }
+          }
+        } catch {}
+
+        try {
+          const movesRaw = localStorage.getItem('ferreteria_local_customer_moves');
+          const moves = movesRaw ? JSON.parse(movesRaw) : [];
+          for (const m of moves) {
+            if (m.customerId === id) {
+              transactions.push({
+                id: m.id,
+                date: m.date || new Date().toISOString(),
+                type: 'PAYMENT',
+                reference: m.reference || `Cobro (${m.paymentMethod || 'Efectivo'})`,
+                debit: 0,
+                credit: Number(m.amount || 0),
+                balance: m.balanceAfter ?? currentBal,
+              });
+            }
+          }
+        } catch {}
+
+        if (transactions.length === 0 && currentBal > 0) {
+          transactions.push({
+            id: 'tx-1',
+            date: new Date().toISOString(),
+            type: 'SALE',
+            reference: 'FC-0001-00000123 (Saldo inicial)',
+            debit: currentBal,
+            credit: 0,
+            balance: currentBal,
+          });
+        }
+
+        transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
         return {
           customer,
-          transactions: [
-            { id: 'tx-1', date: new Date().toISOString(), type: 'SALE', reference: 'FC-0001-00000123', debit: 45000, credit: 0, balance: 45000 },
-          ],
-          totalBalance: (customer as any).currentBalance || 0,
-          availableCredit: Math.max(0, ((customer as any).creditLimit || 0) - ((customer as any).currentBalance || 0)),
+          transactions,
+          totalBalance: currentBal,
+          availableCredit: Math.max(0, ((customer as any).creditLimit || 0) - currentBal),
         } as CustomerAccount;
       }
     },
@@ -264,12 +321,15 @@ export const useCreateCustomer = () => {
       saveLocalCustomers([newCustomer, ...list]);
 
       // Audit log entry
-      const actor = useAuthStore.getState().user?.name || 'Administrador Principal';
-      const actorId = useAuthStore.getState().user?.id || 'u-admin';
+      const currentUser = useAuthStore.getState().user;
+      const actor = currentUser?.name || 'Administrador Principal';
+      const actorId = currentUser?.id || 'u-admin';
+      const actorUsername = currentUser?.username || 'admin';
       recordAuditLog({
         userId: actorId,
+        username: actorUsername,
         user: actor,
-        role: useAuthStore.getState().user?.role || 'ADMIN',
+        role: currentUser?.role || 'ADMIN',
         action: 'CREATE',
         entity: 'Customer',
         entityId: newCustomer.id,
@@ -313,12 +373,15 @@ export const useToggleBanCustomer = () => {
         saveLocalCustomers([...list]);
 
         // Audit log entry
-        const actor = useAuthStore.getState().user?.name || 'Administrador Principal';
-        const actorId = useAuthStore.getState().user?.id || 'u-admin';
+        const currentUser = useAuthStore.getState().user;
+        const actor = currentUser?.name || 'Administrador Principal';
+        const actorId = currentUser?.id || 'u-admin';
+        const actorUsername = currentUser?.username || 'admin';
         recordAuditLog({
           userId: actorId,
+          username: actorUsername,
           user: actor,
-          role: useAuthStore.getState().user?.role || 'ADMIN',
+          role: currentUser?.role || 'ADMIN',
           action: isBanned ? 'BAN' : 'UPDATE',
           entity: 'Customer',
           entityId: id,
@@ -350,16 +413,19 @@ export const useUpdateCustomer = () => {
       const list = getLocalCustomers();
       const index = list.findIndex((c: any) => c.id === id);
       if (index !== -1) {
-        list[index] = { ...list[index], ...customerData };
+        list[index] = normalizeCustomer({ ...list[index], ...customerData });
         saveLocalCustomers([...list]);
 
         // Audit log entry
-        const actor = useAuthStore.getState().user?.name || 'Administrador Principal';
-        const actorId = useAuthStore.getState().user?.id || 'u-admin';
+        const currentUser = useAuthStore.getState().user;
+        const actor = currentUser?.name || 'Administrador Principal';
+        const actorId = currentUser?.id || 'u-admin';
+        const actorUsername = currentUser?.username || 'admin';
         recordAuditLog({
           userId: actorId,
+          username: actorUsername,
           user: actor,
-          role: useAuthStore.getState().user?.role || 'ADMIN',
+          role: currentUser?.role || 'ADMIN',
           action: 'UPDATE',
           entity: 'Customer',
           entityId: id,
@@ -394,12 +460,15 @@ export const useDeleteCustomer = () => {
         saveLocalCustomers([...list]);
 
         // Audit log entry
-        const actor = useAuthStore.getState().user?.name || 'Administrador Principal';
-        const actorId = useAuthStore.getState().user?.id || 'u-admin';
+        const currentUser = useAuthStore.getState().user;
+        const actor = currentUser?.name || 'Administrador Principal';
+        const actorId = currentUser?.id || 'u-admin';
+        const actorUsername = currentUser?.username || 'admin';
         recordAuditLog({
           userId: actorId,
+          username: actorUsername,
           user: actor,
-          role: useAuthStore.getState().user?.role || 'ADMIN',
+          role: currentUser?.role || 'ADMIN',
           action: 'DELETE',
           entity: 'Customer',
           entityId: id,
@@ -427,16 +496,75 @@ export const useRecordCustomerPayment = () => {
         console.warn('Backend offline, recording payment in browser storage');
         const list = getLocalCustomers();
         const index = list.findIndex((c: any) => c.id === id);
+        let customerName = 'Cliente';
+        let newBal = 0;
         if (index !== -1) {
-          (list[index] as any).currentBalance = Math.max(0, ((list[index] as any).currentBalance || 0) - payment.amount);
+          customerName = list[index].name;
+          newBal = Math.max(0, ((list[index] as any).currentBalance ?? list[index].balance ?? 0) - Number(payment.amount || 0));
+          (list[index] as any).currentBalance = newBal;
+          list[index].balance = newBal;
           saveLocalCustomers([...list]);
         }
+
+        // Persist payment in local customer moves
+        try {
+          const movesRaw = localStorage.getItem('ferreteria_local_customer_moves');
+          const moves = movesRaw ? JSON.parse(movesRaw) : [];
+          moves.unshift({
+            id: 'cmov-cust-' + Date.now(),
+            customerId: id,
+            customerName,
+            date: new Date().toISOString(),
+            amount: Number(payment.amount || 0),
+            paymentMethod: payment.paymentMethod,
+            reference: payment.reference || `Recibo de Cobro (${payment.paymentMethod})`,
+            notes: payment.notes || '',
+            balanceAfter: newBal,
+          });
+          localStorage.setItem('ferreteria_local_customer_moves', JSON.stringify(moves));
+        } catch {}
+
+        // If paid in Cash, record cash session movement
+        if (payment.paymentMethod === 'Efectivo' || payment.paymentMethod === 'CASH') {
+          try {
+            const cashRaw = localStorage.getItem('ferreteria_local_cash_session');
+            const activeSession = cashRaw ? JSON.parse(cashRaw) : null;
+            const movsRaw = localStorage.getItem('ferreteria_local_cash_movements');
+            const movs = movsRaw ? JSON.parse(movsRaw) : [];
+            movs.unshift({
+              id: 'mov-cust-' + Date.now(),
+              sessionId: activeSession?.id || 'sess-local',
+              type: 'IN',
+              amount: Number(payment.amount || 0),
+              description: `Cobro Cta. Cte. ${customerName} (${payment.reference || 'Efectivo'})`,
+              createdAt: new Date().toISOString(),
+            });
+            localStorage.setItem('ferreteria_local_cash_movements', JSON.stringify(movs));
+          } catch {}
+        }
+
+        // Audit log
+        const currentUser = useAuthStore.getState().user;
+        recordAuditLog({
+          userId: currentUser?.id || 'u-cajero',
+          username: currentUser?.username || 'cajero',
+          user: currentUser?.name || 'Cajero',
+          role: currentUser?.role || 'VENDEDOR',
+          action: 'UPDATE',
+          entity: 'Customer',
+          entityId: id,
+          description: `Registró cobro de cuenta corriente a ${customerName} por $${Number(payment.amount || 0).toLocaleString()} (${payment.paymentMethod})`,
+          details: { customerId: id, customerName, ...payment, newBalance: newBal },
+        });
+
         return { success: true };
       }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['customers', 'account', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['cash-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-movements'] });
     },
   });
 };

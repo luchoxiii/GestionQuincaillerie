@@ -12,7 +12,7 @@ import { useCurrentCashSession } from '../../services/cash.service';
 import { recordCouponRedemption } from '../../services/coupons.service';
 import { convertQuoteToSaleDirect } from '../../services/quotes.service';
 import { telemetry } from '../../services/telemetry.service';
-import { Ban, Gift, Tag, FileSpreadsheet, Mail, DollarSign, Percent } from 'lucide-react';
+import { Ban, Gift, Tag, FileSpreadsheet, Mail, DollarSign, Percent, Trash2, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAccessibilityStore } from '../../stores/accessibility.store';
 import { a11yAudio } from '../../services/a11y-audio.service';
@@ -45,7 +45,9 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
   const createInvoice = useCreateInvoiceFromSale();
 
   const [payments, setPayments] = useState<{ methodId: string; amount: number }[]>([]);
+  const [selectedMethodId, setSelectedMethodId] = useState<string>('pm-1');
   const [tendered, setTendered] = useState<string>('');
+  const [lastChange, setLastChange] = useState<number>(0);
   const [fiscalType, setFiscalType] = useState<'BLANCO' | 'NEGRO'>('BLANCO');
 
   // Descuento en efectivo para facturación en negro
@@ -65,7 +67,9 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
   useEffect(() => {
     if (isOpen) {
       setPayments([]);
+      setSelectedMethodId('pm-1');
       setTendered('');
+      setLastChange(0);
       setFiscalType('BLANCO');
       setApplyBlackCashDiscount(true);
 
@@ -91,7 +95,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
 
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
   const remaining = Math.max(0, total - totalPaid);
-  const change = Number(tendered) - remaining > 0 ? Number(tendered) - remaining : 0;
+  const change = lastChange + (Number(tendered) > remaining ? Number(tendered) - remaining : 0);
 
   // Determine suggested invoice letter based on customer CUIT vs DNI
   const cleanDoc =
@@ -102,14 +106,53 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
   const isCuit = selectedCustomer?.documentType === 'CUIT' || cleanDoc.length === 11;
   const suggestedLetter: 'A' | 'B' | 'X' = fiscalType === 'NEGRO' ? 'X' : isCuit ? 'A' : 'B';
 
-  const handleAddPayment = (methodId: string, amountStr: string) => {
-    const amount = Number(amountStr);
-    if (!amount || amount <= 0) return;
+  const handleAddPayment = (methodId: string, amountStr?: string) => {
+    const rawVal = amountStr !== undefined && amountStr !== '' ? Number(amountStr) : remaining;
+    if (!rawVal || rawVal <= 0 || remaining <= 0) return;
 
-    const actualAmount = amount > remaining ? remaining : amount;
+    const actualAmount = rawVal > remaining ? remaining : rawVal;
 
-    setPayments([...payments, { methodId, amount: actualAmount }]);
+    // Cuenta Corriente (pm-5 / CURRENT_ACCOUNT) validation
+    const isCurrentAccount =
+      methodId === 'pm-5' ||
+      methodId === 'CURRENT_ACCOUNT' ||
+      paymentMethods?.find((m) => m.id === methodId)?.code === 'CURRENT_ACCOUNT';
+
+    if (isCurrentAccount) {
+      if (!selectedCustomer) {
+        toast.error('Debe seleccionar un cliente registrado para cobrar en Cuenta Corriente (no válido para Consumidor Final).');
+        return;
+      }
+      const currentBal = Number((selectedCustomer as any).currentBalance ?? selectedCustomer.balance ?? 0);
+      const existingCcInCart = payments
+        .filter((p) => p.methodId === 'pm-5' || p.methodId === 'CURRENT_ACCOUNT')
+        .reduce((acc, p) => acc + p.amount, 0);
+      const creditLimit = Number(selectedCustomer.creditLimit ?? 0);
+      if (creditLimit > 0 && currentBal + existingCcInCart + actualAmount > creditLimit) {
+        toast.error(
+          `Límite de crédito excedido para ${selectedCustomer.name}. Disponible: $${Math.max(
+            0,
+            creditLimit - currentBal - existingCcInCart
+          ).toFixed(2)}`
+        );
+        return;
+      }
+    }
+
+    const overpay = Math.max(0, rawVal - remaining);
+    setLastChange((prev) => prev + overpay);
+    setPayments((prev) => [...prev, { methodId, amount: actualAmount }]);
     setTendered('');
+  };
+
+  const handleRemovePayment = (index: number) => {
+    setPayments((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length === 0) {
+        setLastChange(0);
+      }
+      return next;
+    });
   };
 
   const handleConfirm = async () => {
@@ -138,6 +181,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
         total,
         items: cart.map((i) => ({
           productId: i.product.id,
+          productName: i.product.name,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           discount: i.discount,
@@ -164,7 +208,24 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
             customerDocumentNumber:
               selectedCustomer?.documentNumber || (selectedCustomer as any)?.documentNum || '',
             total,
-          });
+            netAmount: rawSubtotal - totalDiscount,
+            taxAmount: tax,
+            taxRate: 21,
+            items: cart.map((i) => ({
+              id: i.product.id,
+              code: i.product.sku,
+              description: i.product.name,
+              unit: 'UN',
+              productId: i.product.id,
+              productName: i.product.name,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              discount: i.discount,
+              taxRate: fiscalType === 'BLANCO' ? i.taxRate : 0,
+              subtotal: i.subtotal,
+              total: fiscalType === 'BLANCO' ? i.total : i.subtotal - i.discount,
+            })),
+          } as any);
 
           if (fiscalType === 'BLANCO') {
             toast.success(`Venta registrada y Factura Oficial ${suggestedLetter} (AFIP) emitida`);
@@ -326,6 +387,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
                 onClick={() => {
                   setFiscalType('BLANCO');
                   setPayments([]);
+                  setLastChange(0);
                 }}
                 className={`p-3 text-left rounded-lg border text-sm transition-all flex flex-col ${
                   fiscalType === 'BLANCO'
@@ -346,6 +408,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
                 onClick={() => {
                   setFiscalType('NEGRO');
                   setPayments([]);
+                  setLastChange(0);
                 }}
                 className={`p-3 text-left rounded-lg border text-sm transition-all flex flex-col ${
                   fiscalType === 'NEGRO'
@@ -386,6 +449,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
                   onCheckedChange={(checked) => {
                     setApplyBlackCashDiscount(checked);
                     setPayments([]);
+                    setLastChange(0);
                   }}
                 />
               </div>
@@ -403,6 +467,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
                         onClick={() => {
                           setBlackCashDiscountPct(pct);
                           setPayments([]);
+                          setLastChange(0);
                         }}
                         className={`px-2.5 py-1 text-xs font-bold rounded border transition-colors ${
                           blackCashDiscountPct === pct
@@ -461,34 +526,81 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
           </div>
 
           {/* Registro de Pagos */}
-          <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <Label>Medio de Pago</Label>
-              <Select
-                onValueChange={(val) => {
-                  if (val) handleAddPayment(val, tendered || remaining.toString());
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentMethods?.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="space-y-2.5">
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { id: 'pm-1', label: 'Efectivo' },
+                { id: 'pm-2', label: 'Débito' },
+                { id: 'pm-3', label: 'Crédito' },
+                { id: 'pm-4', label: 'Transferencia' },
+                { id: 'pm-5', label: 'Cta. Cte.' },
+              ].map((quick) => (
+                <Button
+                  key={quick.id}
+                  type="button"
+                  size="sm"
+                  variant={selectedMethodId === quick.id ? 'default' : 'outline'}
+                  className="h-7 text-xs px-2.5"
+                  disabled={remaining <= 0}
+                  onClick={() => {
+                    setSelectedMethodId(quick.id);
+                    handleAddPayment(quick.id, tendered || remaining.toString());
+                  }}
+                >
+                  {quick.label}
+                </Button>
+              ))}
             </div>
-            <div className="flex-1">
-              <Label>Monto (Paga con)</Label>
-              <Input
-                type="number"
-                value={tendered}
-                onChange={(e) => setTendered(e.target.value)}
-                placeholder={remaining.toFixed(2)}
-              />
+
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <Label>Medio de Pago</Label>
+                <Select
+                  value={selectedMethodId}
+                  onValueChange={(val) => {
+                    if (val) {
+                      setSelectedMethodId(val);
+                      handleAddPayment(val, tendered || remaining.toString());
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentMethods?.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1">
+                <Label>Monto (Paga con)</Label>
+                <Input
+                  type="number"
+                  value={tendered}
+                  onChange={(e) => setTendered(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddPayment(selectedMethodId, tendered || remaining.toString());
+                    }
+                  }}
+                  placeholder={remaining.toFixed(2)}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={remaining <= 0}
+                onClick={() => handleAddPayment(selectedMethodId, tendered || remaining.toString())}
+                className="shrink-0 gap-1"
+              >
+                <Plus className="h-4 w-4" />
+                Agregar Pago
+              </Button>
             </div>
           </div>
 
@@ -499,9 +611,21 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
                 {payments.map((p, idx) => {
                   const m = paymentMethods?.find((x) => x.id === p.methodId);
                   return (
-                    <li key={idx} className="flex justify-between px-3 py-2 text-xs">
+                    <li key={idx} className="flex items-center justify-between px-3 py-2 text-xs">
                       <span className="font-medium text-foreground">{m?.name || 'Pago'}</span>
-                      <span className="font-bold text-foreground">${p.amount.toFixed(2)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-foreground">${p.amount.toFixed(2)}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleRemovePayment(idx)}
+                          title="Quitar pago"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </li>
                   );
                 })}

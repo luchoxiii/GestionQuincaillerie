@@ -3,6 +3,9 @@ import { api } from './api';
 import type { Sale, PaymentMethod } from '@ferreteria/shared';
 import { recordAuditLog } from './audit.service';
 import { useAuthStore } from '@/stores/auth.store';
+import { getLocalProducts } from './products.service';
+import { getLocalCustomers } from './customers.service';
+import { getLocalStock } from './inventory.service';
 
 export interface CreateSaleDTO {
   customerId?: string | null;
@@ -203,7 +206,7 @@ const INITIAL_SALES: any[] = [
   },
 ];
 
-const getLocalSales = (): any[] => {
+export const getLocalSales = (): any[] => {
   try {
     const raw = localStorage.getItem(STORAGE_SALES_KEY);
     if (raw) {
@@ -212,6 +215,7 @@ const getLocalSales = (): any[] => {
         return parsed;
       }
     }
+    localStorage.setItem(STORAGE_SALES_KEY, JSON.stringify(INITIAL_SALES));
   } catch {
     // ignore
   }
@@ -277,16 +281,14 @@ export const useCreateSale = () => {
       let customerName = 'Consumidor Final';
       if (payload.customerId) {
         try {
-          const custRaw = localStorage.getItem('ferreteria_local_customers');
-          if (custRaw) {
-            const custs = JSON.parse(custRaw);
-            const found = custs.find((c: any) => c.id === payload.customerId);
-            if (found) customerName = found.name;
-          }
+          const custs = getLocalCustomers();
+          const found = custs.find((c: any) => c.id === payload.customerId);
+          if (found) customerName = found.name;
         } catch {}
       }
 
-      let sellerName = 'Administrador Principal';
+      const currentUser = useAuthStore.getState().user;
+      let sellerName = currentUser?.name || 'Administrador Principal';
       try {
         const authUserRaw = localStorage.getItem('ferreteria_user') || localStorage.getItem('user');
         if (authUserRaw) {
@@ -322,7 +324,7 @@ export const useCreateSale = () => {
           payload.channel === 'WHATSAPP' ? 'Canal WhatsApp' :
           sellerName
         ),
-        userId: 'u-current',
+        userId: currentUser?.id || 'u-cajero',
         cashSessionId: payload.cashSessionId,
         couponCode: payload.couponCode || null,
         subtotal: payload.subtotal,
@@ -338,44 +340,90 @@ export const useCreateSale = () => {
       const list = getLocalSales();
       saveLocalSales([sale, ...list]);
 
-      // Deduct stock in local storage
+      // Deduct stock in local products, warehouse stock, and record Kardex movements
       try {
-        const prodsRaw = localStorage.getItem('ferreteria_local_products');
-        if (prodsRaw) {
-          const prods = JSON.parse(prodsRaw);
-          for (const item of payload.items) {
-            const p = prods.find((x: any) => x.id === item.productId);
-            if (p) {
-              p.totalStock = Math.max(0, (p.totalStock ?? p.stock ?? 0) - item.quantity);
-              p.stock = p.totalStock;
-            }
+        const prods = getLocalProducts();
+        const stockList = getLocalStock();
+        const stockMovsRaw = localStorage.getItem('ferreteria_local_stock_movements');
+        const stockMovs = stockMovsRaw ? JSON.parse(stockMovsRaw) : [];
+
+        for (const item of payload.items) {
+          const p = prods.find((x: any) => x.id === item.productId);
+          if (p) {
+            p.totalStock = Math.max(0, (p.totalStock ?? p.stock ?? 0) - item.quantity);
+            p.stock = p.totalStock;
           }
-          localStorage.setItem('ferreteria_local_products', JSON.stringify(prods));
+          const st = stockList.find((s: any) => s.productId === item.productId);
+          if (st) {
+            st.quantity = Math.max(0, (st.quantity || 0) - item.quantity);
+          }
+          stockMovs.unshift({
+            id: 'mov-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+            productId: item.productId,
+            warehouseId: 'wh1',
+            type: 'OUT',
+            product: item.productName || p?.name || 'Artículo',
+            quantity: -item.quantity,
+            date: new Date().toISOString(),
+            reference: `Venta ${sale.saleNumber}`,
+          });
+        }
+        localStorage.setItem('ferreteria_local_products', JSON.stringify(prods));
+        localStorage.setItem('ferreteria_local_stock', JSON.stringify(stockList));
+        localStorage.setItem('ferreteria_local_stock_movements', JSON.stringify(stockMovs));
+      } catch {}
+
+      // Update customer currentBalance if paid with Cuenta Corriente (pm-5 / CURRENT_ACCOUNT)
+      try {
+        const ccAmount = (payload.payments || [])
+          .filter((p: any) => p.methodId === 'pm-5' || p.methodId === 'CURRENT_ACCOUNT')
+          .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+
+        if (ccAmount > 0 && payload.customerId) {
+          const custs = getLocalCustomers();
+          const custIdx = custs.findIndex((c: any) => c.id === payload.customerId);
+          if (custIdx !== -1) {
+            const newBal = ((custs[custIdx] as any).currentBalance ?? custs[custIdx].balance ?? 0) + ccAmount;
+            (custs[custIdx] as any).currentBalance = newBal;
+            custs[custIdx].balance = newBal;
+            localStorage.setItem('ferreteria_local_customers', JSON.stringify(custs));
+          }
         }
       } catch {}
 
-      // Add movement to cash session if cash was used
+      // Add movement to cash session ONLY for cash payments
       try {
-        const movsRaw = localStorage.getItem('ferreteria_local_cash_movements');
-        const movs = movsRaw ? JSON.parse(movsRaw) : [];
-        movs.unshift({
-          id: 'mov-' + Date.now(),
-          sessionId: payload.cashSessionId || 'sess-local',
-          type: 'IN',
-          amount: payload.total,
-          description: `Venta ${payload.channel && payload.channel !== 'POS' ? payload.channel : 'Mostrador'} ${sale.saleNumber}`,
-          createdAt: new Date().toISOString(),
-        });
-        localStorage.setItem('ferreteria_local_cash_movements', JSON.stringify(movs));
+        const hasPayments = Array.isArray(payload.payments) && payload.payments.length > 0;
+        const cashAmount = hasPayments
+          ? payload.payments
+              .filter((p: any) => p.methodId === 'pm-1' || p.methodId === 'CASH' || p.methodId === 'Efectivo')
+              .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+          : (!isEcommerce ? Number(payload.total || 0) : 0);
+
+        if (cashAmount > 0) {
+          const movsRaw = localStorage.getItem('ferreteria_local_cash_movements');
+          const movs = movsRaw ? JSON.parse(movsRaw) : [];
+          movs.unshift({
+            id: 'mov-' + Date.now(),
+            sessionId: payload.cashSessionId || 'sess-local',
+            type: 'IN',
+            amount: cashAmount,
+            description: `Venta ${payload.channel && payload.channel !== 'POS' ? payload.channel : 'Mostrador'} ${sale.saleNumber}`,
+            createdAt: new Date().toISOString(),
+          });
+          localStorage.setItem('ferreteria_local_cash_movements', JSON.stringify(movs));
+        }
       } catch {}
 
       // Audit Log Entry
-      const actor = useAuthStore.getState().user?.name || sale.sellerName || 'Vendedor Mostrador';
-      const actorId = useAuthStore.getState().user?.id || 'u-cajero';
+      const actor = currentUser?.name || sale.sellerName || 'Vendedor Mostrador';
+      const actorId = currentUser?.id || 'u-cajero';
+      const actorUsername = currentUser?.username || 'cajero';
       recordAuditLog({
         userId: actorId,
+        username: actorUsername,
         user: actor,
-        role: useAuthStore.getState().user?.role || 'VENDEDOR',
+        role: currentUser?.role || 'VENDEDOR',
         action: 'CREATE',
         entity: 'Sale',
         entityId: sale.id,
@@ -395,8 +443,12 @@ export const useCreateSale = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
+      queryClient.invalidateQueries({ queryKey: ['stockMovements'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['cash-sessions'] });
       queryClient.invalidateQueries({ queryKey: ['cash-movements'] });
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
     },
   });
 };
@@ -508,21 +560,102 @@ export const useVoidSale = () => {
         console.warn('Backend offline, voiding sale locally');
         const list = getLocalSales();
         const item = list.find((s) => s.id === id);
-        if (item) item.status = 'CANCELLED';
-        saveLocalSales([...list]);
+        if (item && item.status !== 'VOIDED' && item.status !== 'CANCELLED') {
+          item.status = 'VOIDED';
+          saveLocalSales([...list]);
+
+          // Restore product stock & warehouse stock
+          try {
+            const prods = getLocalProducts();
+            const stockList = getLocalStock();
+            const stockMovsRaw = localStorage.getItem('ferreteria_local_stock_movements');
+            const stockMovs = stockMovsRaw ? JSON.parse(stockMovsRaw) : [];
+
+            for (const saleItem of item.items || []) {
+              const p = prods.find((x: any) => x.id === saleItem.productId || x.name === saleItem.product?.name);
+              if (p) {
+                p.totalStock = (p.totalStock ?? p.stock ?? 0) + (saleItem.quantity || 0);
+                p.stock = p.totalStock;
+              }
+              const st = stockList.find((s: any) => s.productId === (saleItem.productId || p?.id));
+              if (st) {
+                st.quantity = (st.quantity || 0) + (saleItem.quantity || 0);
+              }
+              if (saleItem.productId || p?.id) {
+                stockMovs.unshift({
+                  id: 'mov-void-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+                  productId: saleItem.productId || p?.id,
+                  warehouseId: 'wh1',
+                  type: 'IN',
+                  product: saleItem.productName || saleItem.product?.name || p?.name || 'Artículo',
+                  quantity: saleItem.quantity || 0,
+                  date: new Date().toISOString(),
+                  reference: `Anulación Venta ${item.saleNumber}`,
+                });
+              }
+            }
+            localStorage.setItem('ferreteria_local_products', JSON.stringify(prods));
+            localStorage.setItem('ferreteria_local_stock', JSON.stringify(stockList));
+            localStorage.setItem('ferreteria_local_stock_movements', JSON.stringify(stockMovs));
+          } catch {}
+
+          // Reverse customer currentBalance if paid via Cuenta Corriente
+          try {
+            const ccAmount = (item.payments || [])
+              .filter((p: any) => p.methodId === 'pm-5' || p.methodId === 'CURRENT_ACCOUNT')
+              .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+            if (ccAmount > 0 && item.customerId) {
+              const custs = getLocalCustomers();
+              const custIdx = custs.findIndex((c: any) => c.id === item.customerId);
+              if (custIdx !== -1) {
+                const newBal = Math.max(0, ((custs[custIdx] as any).currentBalance ?? custs[custIdx].balance ?? 0) - ccAmount);
+                (custs[custIdx] as any).currentBalance = newBal;
+                custs[custIdx].balance = newBal;
+                localStorage.setItem('ferreteria_local_customers', JSON.stringify(custs));
+              }
+            }
+          } catch {}
+
+          // Record reversing cash movement if cash was used
+          try {
+            const hasPayments = Array.isArray(item.payments) && item.payments.length > 0;
+            const cashAmount = hasPayments
+              ? item.payments
+                  .filter((p: any) => p.methodId === 'pm-1' || p.methodId === 'CASH' || p.methodId === 'Efectivo')
+                  .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+              : (item.channel === 'POS' ? Number(item.total || 0) : 0);
+
+            if (cashAmount > 0) {
+              const movsRaw = localStorage.getItem('ferreteria_local_cash_movements');
+              const movs = movsRaw ? JSON.parse(movsRaw) : [];
+              movs.unshift({
+                id: 'mov-void-' + Date.now(),
+                sessionId: item.cashSessionId || 'sess-local',
+                type: 'OUT',
+                amount: cashAmount,
+                description: `Anulación de venta ${item.saleNumber}`,
+                createdAt: new Date().toISOString(),
+              });
+              localStorage.setItem('ferreteria_local_cash_movements', JSON.stringify(movs));
+            }
+          } catch {}
+        }
 
         // Audit Log entry
-        const actor = useAuthStore.getState().user?.name || 'Administrador / Encargado';
-        const actorId = useAuthStore.getState().user?.id || 'u-admin';
+        const currentUser = useAuthStore.getState().user;
+        const actor = currentUser?.name || 'Administrador / Encargado';
+        const actorId = currentUser?.id || 'u-admin';
+        const actorUsername = currentUser?.username || 'admin';
         recordAuditLog({
           userId: actorId,
+          username: actorUsername,
           user: actor,
-          role: useAuthStore.getState().user?.role || 'ADMIN',
+          role: currentUser?.role || 'ADMIN',
           action: 'VOID',
           entity: 'Sale',
           entityId: id,
           description: `Anuló comprobante de venta ${item?.saleNumber || id} ($${(item?.total || 0).toLocaleString()})`,
-          details: { saleId: id, saleNumber: item?.saleNumber, total: item?.total, status: 'CANCELLED' },
+          details: { saleId: id, saleNumber: item?.saleNumber, total: item?.total, status: 'VOIDED' },
         });
 
         return { success: true };
@@ -530,6 +663,13 @@ export const useVoidSale = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
+      queryClient.invalidateQueries({ queryKey: ['stockMovements'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-movements'] });
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
     },
   });
 };

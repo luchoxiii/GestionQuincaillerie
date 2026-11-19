@@ -29,7 +29,10 @@ export function InvoiceDetailModal({ isOpen, onClose, invoice, onEmitCreditNote 
         <div className="flex justify-between items-center mb-4 print:hidden">
           <DialogTitle>Detalle del Comprobante</DialogTitle>
           <div className="flex gap-2">
-            {onEmitCreditNote && invoice.status !== 'ANULADO' && (
+            {onEmitCreditNote &&
+              invoice.status !== 'ANULADO' &&
+              invoice.letter !== 'NC' &&
+              !invoice.type?.startsWith('Nota de Crédito') && (
               <Button variant="destructive" onClick={() => { onClose(); onEmitCreditNote(invoice); }}>
                 Emitir Nota de Crédito
               </Button>
@@ -101,13 +104,13 @@ export function InvoiceDetailModal({ isOpen, onClose, invoice, onEmitCreditNote 
               <tbody>
                 {invoice.items.map((item, index) => (
                   <tr key={index} className="border-b border-gray-200">
-                    <td className="py-2 px-1">{item.code}</td>
-                    <td className="py-2 px-1">{item.description}</td>
+                    <td className="py-2 px-1">{item.code || (item as any).productId || '-'}</td>
+                    <td className="py-2 px-1">{item.description || (item as any).productName || '-'}</td>
                     <td className="py-2 px-1 text-right">{item.quantity}</td>
-                    <td className="py-2 px-1">{item.unit}</td>
-                    <td className="py-2 px-1 text-right">${item.unitPrice.toFixed(2)}</td>
-                    <td className="py-2 px-1 text-right">{item.taxRate}%</td>
-                    <td className="py-2 px-1 text-right">${(item.subtotal * (1 + item.taxRate / 100)).toFixed(2)}</td>
+                    <td className="py-2 px-1">{item.unit || 'UN'}</td>
+                    <td className="py-2 px-1 text-right">${Number(item.unitPrice || 0).toFixed(2)}</td>
+                    <td className="py-2 px-1 text-right">{item.taxRate ?? 21}%</td>
+                    <td className="py-2 px-1 text-right">${Number((item as any).total ?? (item.subtotal * (1 + (item.taxRate ?? 21) / 100))).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -3,6 +3,7 @@ import { InvoicingService } from './invoicing.service';
 import { CreateDirectInvoiceDto, CreateCreditNoteDto } from './dto/invoicing.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('invoicing')
@@ -10,6 +11,7 @@ export class InvoicingController {
   constructor(private readonly invoicingService: InvoicingService) {}
 
   @Get('summary')
+  @RequirePermissions('invoices.view')
   getFiscalSummary(
     @Query('month') month?: string,
     @Query('year') year?: string
@@ -21,26 +23,31 @@ export class InvoicingController {
   }
 
   @Get('sale-points')
+  @RequirePermissions('invoices.view')
   getSalePoints() {
     return this.invoicingService.getSalePoints();
   }
 
   @Get('types')
+  @RequirePermissions('invoices.view')
   getInvoiceTypes() {
     return this.invoicingService.getInvoiceTypes();
   }
 
   @Get()
+  @RequirePermissions('invoices.view')
   findAll(@Query() query: any) {
     return this.invoicingService.findAll(query);
   }
 
   @Get(':id')
+  @RequirePermissions('invoices.view')
   findOne(@Param('id') id: string) {
     return this.invoicingService.findOne(id);
   }
 
   @Post('from-sale/:saleId')
+  @RequirePermissions('invoices.create')
   createFromSale(
     @Param('saleId') saleId: string,
     @Body('salePointId') salePointId?: string
@@ -49,11 +56,13 @@ export class InvoicingController {
   }
 
   @Post('direct')
+  @RequirePermissions('invoices.create')
   createDirectInvoice(@Body() data: CreateDirectInvoiceDto) {
     return this.invoicingService.createDirectInvoice(data);
   }
 
   @Post(':id/credit-note')
+  @RequirePermissions('invoices.void')
   createCreditNote(
     @Param('id') id: string,
     @Body() data: CreateCreditNoteDto

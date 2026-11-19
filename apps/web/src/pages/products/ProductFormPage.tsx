@@ -89,12 +89,17 @@ export default function ProductFormPage() {
 
       if (existingProduct.taxes?.[0]?.taxId) {
         setSelectedTaxId(existingProduct.taxes[0].taxId);
+      } else if ((existingProduct as any).taxRate !== undefined && taxes.length > 0) {
+        const matchedTax = taxes.find((t) => Number(t.rate) === Number((existingProduct as any).taxRate));
+        if (matchedTax) {
+          setSelectedTaxId(matchedTax.id);
+        }
       }
 
       setMinStock(existingProduct.minStock ?? 5);
       setMaxStock(existingProduct.maxStock ?? 100);
     }
-  }, [isEditing, existingProduct]);
+  }, [isEditing, existingProduct, taxes]);
 
   // Set default unit, tax and initial SKU when lists load in create mode
   useEffect(() => {
@@ -193,6 +198,11 @@ export default function ProductFormPage() {
       setCostPrice(currentCost);
     }
 
+    if (!validate()) {
+      toast.error('Por favor complete todos los campos obligatorios correctamente');
+      return;
+    }
+
     if (!name.trim()) {
       setErrors(prev => ({ ...prev, name: 'El nombre del producto es obligatorio' }));
       toast.error('Por favor ingrese el nombre del producto');
@@ -216,6 +226,7 @@ export default function ProductFormPage() {
       costPrice: currentCost,
       profitMargin: typeof profitMargin === 'number' ? profitMargin : undefined,
       salePrice: currentSale,
+      taxRate,
       minStock: typeof minStock === 'number' ? minStock : undefined,
       maxStock: typeof maxStock === 'number' ? maxStock : undefined,
       barcodes: barcode.trim() ? [{ barcode: barcode.trim(), type: 'EAN13' }] : undefined,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,17 @@ export function CreditNoteModal({ isOpen, onClose, invoice }: CreditNoteModalPro
   const [reason, setReason] = useState<string>('');
   const createCreditNote = useCreateCreditNote();
 
+  useEffect(() => {
+    if (!isOpen) {
+      setReason('');
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    setReason('');
+    onClose();
+  };
+
   const handleConfirm = async () => {
     if (!invoice) return;
     if (!reason) {
@@ -26,6 +37,7 @@ export function CreditNoteModal({ isOpen, onClose, invoice }: CreditNoteModalPro
     try {
       await createCreditNote.mutateAsync({ invoiceId: invoice.id, reason });
       toast.success('Nota de Crédito generada y autorizada por AFIP exitosamente');
+      setReason('');
       onClose();
     } catch (e) {
       toast.error('Error al generar la Nota de Crédito');
@@ -35,7 +47,7 @@ export function CreditNoteModal({ isOpen, onClose, invoice }: CreditNoteModalPro
   if (!invoice) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Emitir Nota de Crédito</DialogTitle>
@@ -62,7 +74,7 @@ export function CreditNoteModal({ isOpen, onClose, invoice }: CreditNoteModalPro
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={createCreditNote.isPending}>
+          <Button variant="outline" onClick={handleClose} disabled={createCreditNote.isPending}>
             Cancelar
           </Button>
           <Button onClick={handleConfirm} disabled={!reason || createCreditNote.isPending}>

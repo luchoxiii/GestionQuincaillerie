@@ -152,13 +152,14 @@ const INITIAL_INVOICES: Invoice[] = [
   }
 ];
 
-const getLocalInvoices = (): Invoice[] => {
+export const getLocalInvoices = (): Invoice[] => {
   try {
     const raw = localStorage.getItem(STORAGE_INVOICES_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
+    localStorage.setItem(STORAGE_INVOICES_KEY, JSON.stringify(INITIAL_INVOICES));
   } catch (e) {
     console.error('Error reading localStorage for invoices:', e);
   }
@@ -259,7 +260,16 @@ export const useFiscalSummary = () => {
       const totalFiscalBilled = fiscalInvoices.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0);
       const totalInternalBilled = internalInvoices.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0);
       const totalBilled = totalFiscalBilled + totalInternalBilled;
-      const totalTaxDebit = fiscalInvoices.reduce((acc, inv) => acc + (Number(inv.taxAmount) || (Number(inv.total) * 0.1735)), 0);
+      const totalTaxDebit = fiscalInvoices.reduce((acc, inv) => {
+        const tax =
+          inv.taxAmount !== undefined && inv.taxAmount !== null
+            ? Number(inv.taxAmount)
+            : Number(inv.total) * (21 / 121);
+        return acc + tax;
+      }, 0);
+      const authorizedCount = fiscalInvoices.filter((i) => Boolean(i.cae)).length;
+      const caeAuthorizedPercentage =
+        fiscalInvoices.length > 0 ? Math.round((authorizedCount / fiscalInvoices.length) * 100) : 100;
 
       return {
         totalFiscalBilled,
@@ -269,7 +279,7 @@ export const useFiscalSummary = () => {
         receiptCount: list.length,
         fiscalReceiptCount: fiscalInvoices.length,
         internalReceiptCount: internalInvoices.length,
-        caeAuthorizedPercentage: 100,
+        caeAuthorizedPercentage,
       } as FiscalSummary;
     },
   });
@@ -358,12 +368,18 @@ export const useCreateCreditNote = () => {
         console.warn('Backend offline, creating credit note locally');
         const list = getLocalInvoices();
         const orig = list.find(i => i.id === data.invoiceId);
+        if (orig) {
+          orig.status = 'ANULADO';
+        }
         const randCae = '74' + Math.floor(100000000000 + Math.random() * 900000000000);
+        const origTotal = Number(orig?.total || 0);
+        const origNet = orig?.netAmount !== undefined ? Number(orig.netAmount) : Math.round((origTotal / 1.21) * 100) / 100;
+        const origTax = orig?.taxAmount !== undefined ? Number(orig.taxAmount) : Math.round((origTotal - origNet) * 100) / 100;
         const newNC: Invoice = {
           id: 'nc-' + Date.now(),
           date: new Date().toISOString(),
           type: `Nota de Crédito ${orig?.letter || 'B'}`,
-          letter: orig?.letter || 'B',
+          letter: 'NC',
           fiscalType: orig?.fiscalType || 'BLANCO',
           isFiscal: orig?.isFiscal ?? true,
           number: `0001-${String(list.length + 1).padStart(8, '0')}`,
@@ -373,7 +389,11 @@ export const useCreateCreditNote = () => {
           customerDocumentNumber: orig?.customerDocumentNumber || '',
           cae: randCae,
           caeExpiration: new Date(Date.now() + 10 * 86400000).toISOString(),
-          total: -(orig?.total || 0),
+          netAmount: -Math.abs(origNet),
+          taxRate: orig?.taxRate ?? 21,
+          taxAmount: -Math.abs(origTax),
+          exemptAmount: 0,
+          total: -Math.abs(origTotal),
           status: 'AUTORIZADO',
           afipCode: orig?.letter === 'A' ? '003' : '008',
           items: orig?.items || []

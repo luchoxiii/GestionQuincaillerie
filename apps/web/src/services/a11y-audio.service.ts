@@ -9,6 +9,12 @@ import { formatCurrency } from '@/lib/utils';
 class A11yAudioService {
   private audioCtx: AudioContext | null = null;
   private isMuted = false;
+  private activeTimers: ReturnType<typeof setTimeout>[] = [];
+
+  private clearActiveTimers() {
+    this.activeTimers.forEach((t) => clearTimeout(t));
+    this.activeTimers = [];
+  }
 
   private getAudioContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -26,9 +32,16 @@ class A11yAudioService {
 
   setMuted(muted: boolean) {
     this.isMuted = muted;
+    if (muted) {
+      this.clearActiveTimers();
+    }
   }
 
   resetContext() {
+    this.clearActiveTimers();
+    try {
+      (this.audioCtx as any)?.close?.();
+    } catch {}
     this.audioCtx = null;
   }
 
@@ -54,6 +67,13 @@ class A11yAudioService {
       osc.connect(gain);
       gain.connect(ctx.destination);
 
+      (osc as any).onended = () => {
+        try {
+          (osc as any).disconnect?.();
+          (gain as any).disconnect?.();
+        } catch {}
+      };
+
       osc.start();
       osc.stop(ctx.currentTime + duration);
     } catch (e) {
@@ -72,9 +92,10 @@ class A11yAudioService {
 
       const notes = [523.25, 659.25, 783.99]; // Do, Mi, Sol (C5, E5, G5)
       notes.forEach((freq, idx) => {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           this.playTone(freq, 'triangle', 0.15, 0.12);
         }, idx * 70);
+        this.activeTimers.push(timer);
       });
     } catch {}
   }
@@ -92,9 +113,10 @@ class A11yAudioService {
   playAlert() {
     if (this.isMuted) return;
     this.playTone(440, 'sawtooth', 0.12, 0.1);
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       this.playTone(330, 'sawtooth', 0.16, 0.12);
     }, 120);
+    this.activeTimers.push(timer);
   }
 
   /**
@@ -109,7 +131,7 @@ class A11yAudioService {
    */
   speak(text: string, force = false): Promise<void> {
     return new Promise((resolve) => {
-      if (typeof window === 'undefined' || !window.speechSynthesis) {
+      if (this.isMuted || typeof window === 'undefined' || !window.speechSynthesis) {
         resolve();
         return;
       }
@@ -175,6 +197,7 @@ class A11yAudioService {
    * Cancelar cualquier síntesis de voz en curso
    */
   cancel() {
+    this.clearActiveTimers();
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
         window.speechSynthesis.cancel();

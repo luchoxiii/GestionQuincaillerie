@@ -237,6 +237,20 @@ export const validateCoupon = (
     };
   }
 
+  // Check customer target segment if explicitly provided
+  if (
+    customerSegment &&
+    coupon.targetSegment &&
+    coupon.targetSegment !== 'ALL' &&
+    coupon.targetSegment !== customerSegment
+  ) {
+    return {
+      isValid: false,
+      message: `El cupón "${code}" es exclusivo para el segmento ${coupon.targetSegment}`,
+      calculatedDiscount: 0
+    };
+  }
+
   // Calculate discount
   let calculatedDiscount = 0;
   if (coupon.discountType === 'PERCENTAGE') {

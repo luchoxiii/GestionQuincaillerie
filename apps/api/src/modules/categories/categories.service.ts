@@ -68,9 +68,24 @@ export class CategoriesService {
   }
 
   async update(id: string, data: any) {
-    // Prevent setting parent to self
-    if (data.parentId === id) {
-      throw new BadRequestException('Una categoría no puede ser su propio padre');
+    // Prevent setting parent to self or any descendant (multi-hop cycle check)
+    if (data.parentId) {
+      if (data.parentId === id) {
+        throw new BadRequestException('Una categoría no puede ser su propio padre');
+      }
+      let currentParentId: string | null = data.parentId;
+      const visited = new Set<string>([id]);
+      while (currentParentId) {
+        if (visited.has(currentParentId)) {
+          throw new BadRequestException('Ciclo jerárquico detectado en categorías');
+        }
+        visited.add(currentParentId);
+        const parentCat = await this.prisma.category.findUnique({
+          where: { id: currentParentId },
+          select: { parentId: true },
+        });
+        currentParentId = parentCat?.parentId || null;
+      }
     }
 
     return this.prisma.category.update({

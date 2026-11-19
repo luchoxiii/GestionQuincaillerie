@@ -81,6 +81,17 @@ export function UserModal({ isOpen, onClose, userToEdit, roles, onOpenBitacora }
     }
   }, [isOpen, userToEdit, roles]);
 
+  const rolePermissions = useMemo(() => {
+    const set = new Set<string>();
+    selectedRoleIds.forEach((rId) => {
+      const foundRole = roles.find((r) => r.id === rId);
+      if (foundRole && Array.isArray(foundRole.permissions)) {
+        foundRole.permissions.forEach((p) => set.add(p));
+      }
+    });
+    return set;
+  }, [selectedRoleIds, roles]);
+
   if (!isOpen) return null;
 
   const toggleRole = (roleId: string) => {
@@ -90,11 +101,18 @@ export function UserModal({ isOpen, onClose, userToEdit, roles, onOpenBitacora }
   };
 
   const toggleCustomPermission = (permId: string) => {
-    setCustomPermissions((prev) =>
-      prev.includes(permId) ? prev.filter((p) => p !== permId) : [...prev, permId]
-    );
-    // If it was denied, remove from denied
-    setDeniedPermissions((prev) => prev.filter((p) => p !== permId));
+    const isFromRole = rolePermissions.has(permId) || rolePermissions.has('*');
+    if (isFromRole) {
+      setDeniedPermissions((prev) =>
+        prev.includes(permId) ? prev.filter((p) => p !== permId) : [...prev, permId]
+      );
+      setCustomPermissions((prev) => prev.filter((p) => p !== permId));
+    } else {
+      setCustomPermissions((prev) =>
+        prev.includes(permId) ? prev.filter((p) => p !== permId) : [...prev, permId]
+      );
+      setDeniedPermissions((prev) => prev.filter((p) => p !== permId));
+    }
   };
 
   // Calculate total active permissions preview
@@ -370,6 +388,11 @@ export function UserModal({ isOpen, onClose, userToEdit, roles, onOpenBitacora }
                     +{customPermissions.length} extras
                   </Badge>
                 )}
+                {deniedPermissions.length > 0 && (
+                  <Badge variant="destructive" className="text-[10px]">
+                    -{deniedPermissions.length} revocados
+                  </Badge>
+                )}
               </div>
               {showAdvancedPerms ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
@@ -377,29 +400,32 @@ export function UserModal({ isOpen, onClose, userToEdit, roles, onOpenBitacora }
             {showAdvancedPerms && (
               <div className="p-4 space-y-4 border-t bg-muted/10">
                 <p className="text-xs text-muted-foreground">
-                  Puede otorgar permisos especiales adicionales a este usuario sin necesidad de crear un rol nuevo.
+                  Puede otorgar permisos especiales adicionales o revocar permisos otorgados por rol para este usuario.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {PERMISSION_CATALOG.filter((p) => !p.adminOnly).map((perm) => {
-                    const isGrantedByRole = effectivePermissions.includes(perm.id) && !customPermissions.includes(perm.id);
-                    const isDirectlyGranted = customPermissions.includes(perm.id);
+                    const isFromRole = rolePermissions.has(perm.id) || rolePermissions.has('*');
+                    const isRevoked = isFromRole && deniedPermissions.includes(perm.id);
+                    const isGrantedByRole = isFromRole && !isRevoked;
+                    const isDirectlyGranted = !isFromRole && customPermissions.includes(perm.id);
 
                     return (
                       <label
                         key={perm.id}
-                        className={`flex items-start gap-2 p-2 rounded-md border text-xs transition-colors ${
+                        className={`flex items-start gap-2 p-2 rounded-md border text-xs transition-colors cursor-pointer ${
                           isDirectlyGranted
-                            ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-950 dark:text-emerald-300 font-medium cursor-pointer'
+                            ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-950 dark:text-emerald-300 font-medium'
+                            : isRevoked
+                            ? 'border-destructive/50 bg-destructive/10 text-destructive font-medium'
                             : isGrantedByRole
-                            ? 'border-border bg-muted/40 opacity-70 cursor-not-allowed'
-                            : 'border-border bg-background hover:bg-muted/40 cursor-pointer'
+                            ? 'border-primary/30 bg-primary/5 hover:bg-primary/10'
+                            : 'border-border bg-background hover:bg-muted/40'
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={isDirectlyGranted || isGrantedByRole}
-                          disabled={isGrantedByRole}
                           onChange={() => toggleCustomPermission(perm.id)}
                           className="mt-0.5 rounded border-border text-primary focus:ring-primary h-3.5 w-3.5"
                         />
@@ -408,6 +434,9 @@ export function UserModal({ isOpen, onClose, userToEdit, roles, onOpenBitacora }
                             <span className="font-semibold">{perm.action}</span>
                             {isGrantedByRole && (
                               <Badge variant="outline" className="text-[9px] px-1 py-0">Por Rol</Badge>
+                            )}
+                            {isRevoked && (
+                              <Badge variant="destructive" className="text-[9px] px-1 py-0">Revocado</Badge>
                             )}
                             {isDirectlyGranted && (
                               <Badge className="bg-emerald-600 text-white text-[9px] px-1 py-0">Directo</Badge>

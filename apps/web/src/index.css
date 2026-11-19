@@ -74,3 +74,29 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  .no-print,
+  aside,
+  nav,
+  header,
+  [data-radix-FocusScope] > button[aria-label="Close"] {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  [role="dialog"] {
+    position: static !important;
+    transform: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}

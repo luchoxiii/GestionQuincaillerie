@@ -357,7 +357,12 @@ export function CustomerProfileModal({ isOpen, onClose, profile }: CustomerProfi
               onClick={() => {
                 const phone = customer.phone?.replace(/\D/g, '');
                 if (phone) {
-                  window.open(`https://wa.me/549${phone}?text=Hola%20${encodeURIComponent(customer.name)},%20te%20escribimos%20de%20la%20Ferretería.%20Queríamos%20hacerte%20llegar%20un%20beneficio%20exclusivo%20con%20el%20cupón%20${marketing.suggestedCouponCode}.`, '_blank');
+                  const waPhone = phone.startsWith('549')
+                    ? phone
+                    : phone.startsWith('54')
+                    ? `549${phone.slice(2)}`
+                    : `549${phone}`;
+                  window.open(`https://wa.me/${waPhone}?text=Hola%20${encodeURIComponent(customer.name)},%20te%20escribimos%20de%20la%20Ferretería.%20Queríamos%20hacerte%20llegar%20un%20beneficio%20exclusivo%20con%20el%20cupón%20${marketing.suggestedCouponCode}.`, '_blank');
                 } else {
                   window.location.href = `mailto:${customer.email || ''}?subject=Beneficio%20Especial%20en%20Ferretería&body=Hola%20${encodeURIComponent(customer.name)},%20aprovecha%20tu%20cupón%20${marketing.suggestedCouponCode}`;
                 }

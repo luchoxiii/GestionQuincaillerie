@@ -111,25 +111,37 @@ export default function DashboardPage() {
   }, [selectedPeriod, customStartDate, customEndDate]);
 
   // Stock alerts dynamic calculation
-  const stockAlerts = useMemo(() => {
+  const { stockAlerts, totalCriticalCount, totalOutCount } = useMemo(() => {
     if (allProducts && allProducts.length > 0) {
-      const critical = allProducts.filter((p: any) => (p.stock ?? 0) <= (p.minStock ?? 5));
-      if (critical.length > 0) {
-        return critical.slice(0, 4).map((p: any) => ({
+      const critical = allProducts.filter((p: any) => (p.stock ?? p.totalStock ?? 0) <= (p.minStock ?? 5));
+      const outCount = critical.filter((p: any) => (p.stock ?? p.totalStock ?? 0) <= 0).length;
+      const sliced = critical.slice(0, 5).map((p: any) => {
+        const sVal = p.stock ?? p.totalStock ?? 0;
+        return {
           id: p.id,
           name: p.name,
-          stock: p.stock ?? 0,
+          stock: sVal,
           min: p.minStock ?? 5,
-          status: (p.stock ?? 0) <= 0 ? 'out' : 'low'
-        }));
-      }
+          status: sVal <= 0 ? 'out' : 'low',
+        };
+      });
+      return {
+        stockAlerts: sliced,
+        totalCriticalCount: critical.length,
+        totalOutCount: outCount,
+      };
     }
-    return [
+    const fallback = [
       { id: '1', name: 'Martillo Galponero 500g', stock: 2, min: 5, status: 'low' },
       { id: '2', name: 'Clavos Punta París 2.5"', stock: 0, min: 50, status: 'out' },
       { id: '3', name: 'Taladro Percutor 700W', stock: 1, min: 3, status: 'low' },
       { id: '4', name: 'Disco de Corte 115mm', stock: 4, min: 10, status: 'low' },
     ];
+    return {
+      stockAlerts: fallback,
+      totalCriticalCount: fallback.length,
+      totalOutCount: fallback.filter((a) => a.status === 'out').length,
+    };
   }, [allProducts]);
 
   // E-commerce summary metrics
@@ -151,13 +163,14 @@ export default function DashboardPage() {
         const typeStr = s.fiscalType === 'BLANCO' 
           ? (s.invoiceNumber?.startsWith('A') ? 'Factura A' : 'Factura B') 
           : 'Ticket X (Interno)';
+        const isVoided = s.status === 'VOIDED' || s.status === 'CANCELLED';
         return {
           id: s.saleNumber || s.invoiceNumber || s.id,
           date: `${dateStr} ${timeStr}`,
           type: typeStr,
           customer: s.customerName || s.customer?.name || 'Consumidor Final',
-          amount: s.status === 'VOIDED' ? -Number(s.total || 0) : Number(s.total || 0),
-          status: s.status === 'VOIDED' ? 'Anulado' : 'Completado',
+          amount: isVoided ? -Number(s.total || 0) : Number(s.total || 0),
+          status: isVoided ? 'Anulado' : 'Completado',
           fiscalType: s.fiscalType || 'BLANCO',
           channel: s.channel || 'POS',
           externalOrderId: s.externalOrderId,
@@ -188,7 +201,7 @@ export default function DashboardPage() {
       ['Margen Promedio (%)', `${Number(salesData?.summary?.averageMargin || 0).toFixed(1)}%`],
       ['Ticket Promedio ($)', Number(salesData?.summary?.averageTicket || 0).toFixed(2)],
       ['Cantidad de Operaciones', Number(salesData?.summary?.count || 0)],
-      ['Artículos en Stock Crítico', stockAlerts.length],
+      ['Artículos en Stock Crítico', totalCriticalCount],
       [''],
       ['=== EVOLUCIÓN TEMPORAL DE VENTAS ===', '', ''],
       ['Punto Temporal / Fecha', 'Ventas ($)', 'Costo ($)'],
@@ -446,11 +459,11 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
-              {stockAlerts.length}
+              {totalCriticalCount}
             </div>
             <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center mt-1">
               <ArrowDownRight className="h-3 w-3 mr-1" />
-              {stockAlerts.filter(a => a.status === 'out').length} artículos agotados
+              {totalOutCount} artículos agotados
             </p>
           </CardContent>
         </Card>
@@ -560,25 +573,31 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3 mt-1">
-              {stockAlerts.map((item) => (
-                <div key={item.id} className="flex items-center justify-between border-b last:border-0 pb-2.5 last:pb-0">
-                  <div className="space-y-0.5 max-w-[200px]">
-                    <p className="text-sm font-medium leading-none truncate">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Existencia: <span className="font-semibold text-foreground">{item.stock}</span> / Mín: {item.min}
-                    </p>
-                  </div>
-                  {item.status === 'out' ? (
-                    <span className="inline-flex items-center rounded-full bg-red-100 dark:bg-red-950/50 px-2.5 py-0.5 text-xs font-semibold text-red-800 dark:text-red-300">
-                      Sin Stock
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-950/50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
-                      Stock Bajo
-                    </span>
-                  )}
+              {stockAlerts.length === 0 ? (
+                <div className="py-6 text-center text-xs text-muted-foreground">
+                  Sin alertas de stock crítico en este momento.
                 </div>
-              ))}
+              ) : (
+                stockAlerts.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between border-b last:border-0 pb-2.5 last:pb-0">
+                    <div className="space-y-0.5 max-w-[200px]">
+                      <p className="text-sm font-medium leading-none truncate">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Existencia: <span className="font-semibold text-foreground">{item.stock}</span> / Mín: {item.min}
+                      </p>
+                    </div>
+                    {item.status === 'out' ? (
+                      <span className="inline-flex items-center rounded-full bg-red-100 dark:bg-red-950/50 px-2.5 py-0.5 text-xs font-semibold text-red-800 dark:text-red-300">
+                        Sin Stock
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-950/50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                        Stock Bajo
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
             <Button className="w-full mt-5" variant="outline" asChild>
               <Link to="/compras/nueva">

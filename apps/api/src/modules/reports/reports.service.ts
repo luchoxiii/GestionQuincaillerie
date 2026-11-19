@@ -63,7 +63,7 @@ export class ReportsService {
     const sales = await this.prisma.sale.findMany({
       where: {
         date: { gte: start, lte: end },
-        status: { notIn: ['VOIDED'] },
+        status: 'COMPLETED',
       },
       include: {
         items: {
@@ -174,7 +174,7 @@ export class ReportsService {
       }
     }
 
-    const whereSale: any = { status: { notIn: ['VOIDED'] } };
+    const whereSale: any = { status: 'COMPLETED' };
     if (start && end) {
       whereSale.date = { gte: start, lte: end };
     }
@@ -194,8 +194,14 @@ export class ReportsService {
       take: Number(limit)
     });
 
-    const products = await Promise.all(topItems.map(async item => {
-      const product = await this.prisma.product.findUnique({ where: { id: item.productId } });
+    const productIds = topItems.map(item => item.productId);
+    const productRecords = productIds.length > 0
+      ? await this.prisma.product.findMany({ where: { id: { in: productIds } } })
+      : [];
+    const productMap = new Map(productRecords.map(p => [p.id, p]));
+
+    const products = topItems.map(item => {
+      const product = productMap.get(item.productId);
       return {
         productId: item.productId,
         productName: product?.name,
@@ -203,7 +209,7 @@ export class ReportsService {
         quantitySold: item._sum.quantity,
         revenue: item._sum.total,
       };
-    }));
+    });
 
     return products;
   }
@@ -253,7 +259,7 @@ export class ReportsService {
     const invoices = await this.prisma.invoice.findMany({
       where: {
         date: { gte: start, lte: end },
-        status: { in: ['AUTHORIZED', 'VOIDED'] }
+        status: 'AUTHORIZED'
       },
       include: {
         customer: true,
@@ -265,11 +271,15 @@ export class ReportsService {
     });
 
     const report = invoices.map(inv => {
-      const net21 = inv.taxes.find(t => Number(t.taxRate) === 21)?.baseAmount || 0;
-      const iva21 = inv.taxes.find(t => Number(t.taxRate) === 21)?.taxAmount || 0;
-      const net105 = inv.taxes.find(t => Number(t.taxRate) === 10.5)?.baseAmount || 0;
-      const iva105 = inv.taxes.find(t => Number(t.taxRate) === 10.5)?.taxAmount || 0;
-      const exempt = inv.taxes.find(t => Number(t.taxRate) === 0)?.baseAmount || 0;
+      const isCreditNote = ['003', '008', '013'].includes(inv.invoiceType?.code || '');
+      const mult = isCreditNote ? -1 : 1;
+      const net21 = Number(inv.taxes.find(t => Number(t.taxRate) === 21)?.baseAmount || 0) * mult;
+      const iva21 = Number(inv.taxes.find(t => Number(t.taxRate) === 21)?.taxAmount || 0) * mult;
+      const net105 = Number(inv.taxes.find(t => Number(t.taxRate) === 10.5)?.baseAmount || 0) * mult;
+      const iva105 = Number(inv.taxes.find(t => Number(t.taxRate) === 10.5)?.taxAmount || 0) * mult;
+      const net27 = Number(inv.taxes.find(t => Number(t.taxRate) === 27)?.baseAmount || 0) * mult;
+      const iva27 = Number(inv.taxes.find(t => Number(t.taxRate) === 27)?.taxAmount || 0) * mult;
+      const exempt = Number(inv.taxes.find(t => Number(t.taxRate) === 0)?.baseAmount || 0) * mult;
 
       return {
         date: inv.date,
@@ -280,12 +290,14 @@ export class ReportsService {
         customerDocType: inv.customer?.documentType || '',
         customerDocNum: inv.customer?.documentNum || '',
         customerTaxCondition: inv.customer?.taxCondition || '',
-        net21: Number(net21),
-        iva21: Number(iva21),
-        net105: Number(net105),
-        iva105: Number(iva105),
-        exempt: Number(exempt),
-        total: Number(inv.total),
+        net21,
+        iva21,
+        net105,
+        iva105,
+        net27,
+        iva27,
+        exempt,
+        total: Number(inv.total) * mult,
         cae: inv.cae
       };
     });
@@ -293,11 +305,13 @@ export class ReportsService {
     const totals = report.reduce((acc, curr) => ({
       totalNet21: acc.totalNet21 + curr.net21,
       totalNet105: acc.totalNet105 + curr.net105,
+      totalNet27: acc.totalNet27 + curr.net27,
       totalIva21: acc.totalIva21 + curr.iva21,
       totalIva105: acc.totalIva105 + curr.iva105,
+      totalIva27: acc.totalIva27 + curr.iva27,
       totalExempt: acc.totalExempt + curr.exempt,
       totalInvoiced: acc.totalInvoiced + curr.total,
-    }), { totalNet21: 0, totalNet105: 0, totalIva21: 0, totalIva105: 0, totalExempt: 0, totalInvoiced: 0 });
+    }), { totalNet21: 0, totalNet105: 0, totalNet27: 0, totalIva21: 0, totalIva105: 0, totalIva27: 0, totalExempt: 0, totalInvoiced: 0 });
 
     return { items: report, totals };
   }

@@ -18,15 +18,37 @@ export class PermissionsGuard implements CanActivate {
     
     const { user } = context.switchToHttp().getRequest();
     
-    if (!user || !user.permissions) {
+    if (!user) {
       return false;
     }
+
+    if (
+      user.roles?.some((r: string) => r.toUpperCase() === 'ADMIN' || r.toUpperCase() === 'ADMINISTRADOR') ||
+      user.role?.toUpperCase() === 'ADMIN' ||
+      user.role?.toUpperCase() === 'ADMINISTRADOR'
+    ) {
+      return true;
+    }
+
+    if (!Array.isArray(user.permissions)) {
+      return false;
+    }
+
+    const normalizedUserPerms = new Set<string>(
+      user.permissions.map((p: string) => String(p).replace(/:/g, '.')),
+    );
     
     // Check if user has all required permissions or is Admin
-    if (user.permissions.includes('ALL')) {
+    if (normalizedUserPerms.has('ALL') || normalizedUserPerms.has('*')) {
       return true; // Super admin
     }
     
-    return requiredPermissions.every(permission => user.permissions.includes(permission));
+    return requiredPermissions.every(permission => {
+      const normRequired = String(permission).replace(/:/g, '.');
+      if (normalizedUserPerms.has(normRequired)) return true;
+      const [module] = normRequired.split('.');
+      if (module && normalizedUserPerms.has(`${module}.*`)) return true;
+      return false;
+    });
   }
 }

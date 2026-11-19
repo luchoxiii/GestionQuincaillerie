@@ -41,7 +41,7 @@ describe('Email Notification Service', () => {
       expect(html).toContain('Taladro Percutor 750W');
       expect(html).toContain('Mechas para Concreto x 5');
       expect(html).toContain('Tarjeta de Débito');
-      expect(html).toContain(DEFAULT_EMAIL_SETTINGS.fromName);
+      expect(html).toContain('Ferretería Central - Facturación &amp; Mostrador');
     });
 
     it('debería incluir el descuento en efectivo cuando se factura en negro', () => {
@@ -54,6 +54,27 @@ describe('Email Notification Service', () => {
       const html = generateReceiptEmailHtml(blackPayload, DEFAULT_EMAIL_SETTINGS);
       expect(html).toContain('Ticket X / Remito');
       expect(html).toContain('Descuento Efectivo');
+    });
+
+    it('debería sanitizar etiquetas HTML y prevenir ataques XSS (OWASP A03)', () => {
+      const xssPayload: SaleReceiptEmailPayload = {
+        ...mockPayload,
+        customerName: '<script>alert("XSS")</script>Juan',
+        items: [
+          { name: '<img src=x onerror=alert(1)>Martillo', quantity: 1, unitPrice: 100, total: 100 },
+        ],
+      };
+
+      const html = generateReceiptEmailHtml(xssPayload, {
+        ...DEFAULT_EMAIL_SETTINGS,
+        fromName: '<b>Ferretería Inyectada</b>',
+      });
+
+      expect(html).not.toContain('<script>');
+      expect(html).toContain('&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;Juan');
+      expect(html).not.toContain('<img src=x onerror=alert(1)>');
+      expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;Martillo');
+      expect(html).toContain('&lt;b&gt;Ferretería Inyectada&lt;/b&gt;');
     });
   });
 

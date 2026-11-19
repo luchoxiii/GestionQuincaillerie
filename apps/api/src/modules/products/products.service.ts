@@ -232,7 +232,7 @@ export class ProductsService {
     const oldProduct = await this.prisma.product.findUnique({ where: { id } });
     if (!oldProduct) throw new NotFoundException('Producto no encontrado');
 
-    const { barcodes, taxIds, ...updateData } = data;
+    const { barcodes, taxIds, userId, ...updateData } = data;
 
     // Record price history if prices changed
     const costChanged = updateData.costPrice !== undefined &&
@@ -240,53 +240,59 @@ export class ProductsService {
     const priceChanged = updateData.salePrice !== undefined &&
       Number(oldProduct.salePrice) !== Number(updateData.salePrice);
 
-    if (costChanged || priceChanged) {
-      await this.prisma.priceHistory.create({
-        data: {
-          productId: id,
-          oldCost: oldProduct.costPrice,
-          newCost: updateData.costPrice ?? oldProduct.costPrice,
-          oldPrice: oldProduct.salePrice,
-          newPrice: updateData.salePrice ?? oldProduct.salePrice,
-          userId: data.userId || null,
+    const runTx = this.prisma.$transaction
+      ? this.prisma.$transaction.bind(this.prisma)
+      : async (fn: any) => fn(this.prisma);
+
+    return runTx(async (tx: any) => {
+      if (costChanged || priceChanged) {
+        await tx.priceHistory.create({
+          data: {
+            productId: id,
+            oldCost: oldProduct.costPrice,
+            newCost: updateData.costPrice ?? oldProduct.costPrice,
+            oldPrice: oldProduct.salePrice,
+            newPrice: updateData.salePrice ?? oldProduct.salePrice,
+            userId: userId || null,
+          },
+        });
+      }
+
+      // Update barcodes if provided
+      if (barcodes !== undefined) {
+        await tx.productBarcode.deleteMany({ where: { productId: id } });
+        if (barcodes.length > 0) {
+          await tx.productBarcode.createMany({
+            data: barcodes.map((b: any) => ({
+              productId: id,
+              barcode: b.barcode,
+              type: b.type || 'EAN13',
+            })),
+          });
+        }
+      }
+
+      // Update taxes if provided
+      if (taxIds !== undefined) {
+        await tx.productTax.deleteMany({ where: { productId: id } });
+        if (taxIds.length > 0) {
+          await tx.productTax.createMany({
+            data: taxIds.map((taxId: string) => ({ productId: id, taxId })),
+          });
+        }
+      }
+
+      return tx.product.update({
+        where: { id },
+        data: updateData,
+        include: {
+          category: true,
+          brand: true,
+          unit: true,
+          barcodes: true,
+          taxes: { include: { tax: true } },
         },
       });
-    }
-
-    // Update barcodes if provided
-    if (barcodes !== undefined) {
-      await this.prisma.productBarcode.deleteMany({ where: { productId: id } });
-      if (barcodes.length > 0) {
-        await this.prisma.productBarcode.createMany({
-          data: barcodes.map((b: any) => ({
-            productId: id,
-            barcode: b.barcode,
-            type: b.type || 'EAN13',
-          })),
-        });
-      }
-    }
-
-    // Update taxes if provided
-    if (taxIds !== undefined) {
-      await this.prisma.productTax.deleteMany({ where: { productId: id } });
-      if (taxIds.length > 0) {
-        await this.prisma.productTax.createMany({
-          data: taxIds.map((taxId: string) => ({ productId: id, taxId })),
-        });
-      }
-    }
-
-    return this.prisma.product.update({
-      where: { id },
-      data: updateData,
-      include: {
-        category: true,
-        brand: true,
-        unit: true,
-        barcodes: true,
-        taxes: { include: { tax: true } },
-      },
     });
   }
 
@@ -309,8 +315,9 @@ export class ProductsService {
     return this.prisma.tax.findMany({ orderBy: { name: 'asc' } });
   }
 
-  async massPriceUpdate(data: { categoryId?: string, brandId?: string, supplierId?: string, percentageChange: number, roundTo?: number, userId?: string }) {
-    const { categoryId, brandId, percentageChange, roundTo = 2, userId } = data;
+  async massPriceUpdate(data: { categoryId?: string, brandId?: string, supplierId?: string, percentageChange?: number, percentage?: number, roundTo?: number, userId?: string }) {
+    const { categoryId, brandId, roundTo = 2, userId } = data;
+    const pct = Number(data.percentageChange ?? data.percentage ?? 0);
     
     const where: any = { isActive: true };
     if (categoryId) where.categoryId = categoryId;
@@ -322,7 +329,7 @@ export class ProductsService {
       let updatedCount = 0;
       for (const product of products) {
         const oldPrice = Number(product.salePrice);
-        let newPrice = oldPrice * (1 + percentageChange / 100);
+        let newPrice = oldPrice * (1 + pct / 100);
         
         const factor = Math.pow(10, roundTo);
         newPrice = Math.round(newPrice * factor) / factor;

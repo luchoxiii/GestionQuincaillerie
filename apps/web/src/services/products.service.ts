@@ -54,6 +54,7 @@ export interface Product {
   maxStock?: number | null;
   totalStock?: number;
   stock?: number;
+  taxRate?: number;
   status?: 'ACTIVE' | 'INACTIVE';
   category?: { id: string; name: string } | null;
   brand?: { id: string; name: string } | null;
@@ -77,6 +78,9 @@ export interface CreateProductInput {
   salePrice: number;
   minStock?: number;
   maxStock?: number;
+  stock?: number;
+  initialStock?: number;
+  taxRate?: number;
   barcodes?: { barcode: string; type?: string }[];
   taxIds?: string[];
 }
@@ -168,7 +172,7 @@ const INITIAL_PRODUCTS: Product[] = [
   },
 ];
 
-const getLocalProducts = (): Product[] => {
+export const getLocalProducts = (): Product[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -177,18 +181,46 @@ const getLocalProducts = (): Product[] => {
         return parsed;
       }
     }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_PRODUCTS));
   } catch (e) {
     console.error('Error reading localStorage:', e);
   }
   return INITIAL_PRODUCTS;
 };
 
-const saveLocalProducts = (products: Product[]) => {
+export const saveLocalProducts = (products: Product[]) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
   } catch (e) {
     console.error('Error writing localStorage:', e);
   }
+};
+
+const resolveTaxesFromIds = (taxIds?: string[], explicitRate?: number): { taxes: ProductTax[]; taxRate: number } => {
+  const TAX_MAP: Record<string, { id: string; name: string; rate: number }> = {
+    'tax-21': { id: 'tax-21', name: 'IVA 21%', rate: 21 },
+    't1': { id: 't1', name: 'IVA 21%', rate: 21 },
+    'tax-105': { id: 'tax-105', name: 'IVA 10.5%', rate: 10.5 },
+    't2': { id: 't2', name: 'IVA 10.5%', rate: 10.5 },
+    'tax-27': { id: 'tax-27', name: 'IVA 27%', rate: 27 },
+    't3': { id: 't3', name: 'IVA 27%', rate: 27 },
+    'tax-0': { id: 'tax-0', name: 'Exento 0%', rate: 0 },
+    't4': { id: 't4', name: 'Exento 0%', rate: 0 },
+  };
+  if (taxIds && taxIds.length > 0) {
+    const first = TAX_MAP[taxIds[0]] || { id: taxIds[0], name: 'IVA 21%', rate: 21 };
+    return {
+      taxes: [{ taxId: first.id, tax: first }],
+      taxRate: first.rate,
+    };
+  }
+  const rate = explicitRate !== undefined ? Number(explicitRate) : 21;
+  const taxId = rate === 10.5 ? 'tax-105' : rate === 27 ? 'tax-27' : rate === 0 ? 'tax-0' : 'tax-21';
+  const entry = TAX_MAP[taxId];
+  return {
+    taxes: [{ taxId: entry.id, tax: entry }],
+    taxRate: entry.rate,
+  };
 };
 
 export const PRODUCT_KEYS = {
@@ -274,6 +306,13 @@ export const useCreateProduct = () => {
         console.warn('Backend offline, saving product to browser storage');
       }
 
+      const resolvedTax = resolveTaxesFromIds(payload.taxIds, payload.taxRate);
+      const initialQty = payload.stock !== undefined
+        ? Number(payload.stock)
+        : payload.initialStock !== undefined
+          ? Number(payload.initialStock)
+          : 0;
+
       const newProduct: Product = {
         id: created?.id || 'prod-' + Date.now(),
         code: payload.code,
@@ -289,8 +328,10 @@ export const useCreateProduct = () => {
         price: Number(payload.salePrice),
         minStock: payload.minStock !== undefined ? Number(payload.minStock) : 5,
         maxStock: payload.maxStock !== undefined ? Number(payload.maxStock) : 100,
-        stock: 10,
-        totalStock: 10,
+        stock: initialQty,
+        totalStock: initialQty,
+        taxRate: resolvedTax.taxRate,
+        taxes: resolvedTax.taxes,
         isActive: payload.isActive !== false,
         status: payload.isActive !== false ? 'ACTIVE' : 'INACTIVE',
         barcodes: payload.barcodes || [],
@@ -323,6 +364,9 @@ export const useUpdateProduct = () => {
       const index = list.findIndex((p) => p.id === id);
       if (index !== -1) {
         const current = list[index];
+        const resolvedTax = (payload.taxIds || payload.taxRate !== undefined)
+          ? resolveTaxesFromIds(payload.taxIds, payload.taxRate)
+          : null;
         const updatedProduct: Product = {
           ...current,
           ...payload,
@@ -336,6 +380,8 @@ export const useUpdateProduct = () => {
           price: payload.salePrice !== undefined ? Number(payload.salePrice) : current.price,
           minStock: payload.minStock !== undefined ? Number(payload.minStock) : current.minStock,
           maxStock: payload.maxStock !== undefined ? Number(payload.maxStock) : current.maxStock,
+          taxRate: resolvedTax ? resolvedTax.taxRate : current.taxRate,
+          taxes: resolvedTax ? resolvedTax.taxes : current.taxes,
           isActive: payload.isActive !== undefined ? payload.isActive : current.isActive,
           status: (payload.isActive !== undefined ? payload.isActive : current.isActive) ? 'ACTIVE' : 'INACTIVE',
           barcodes: payload.barcodes || current.barcodes,

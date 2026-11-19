@@ -6,9 +6,67 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '@/services/auth.service';
-import { getUserEffectivePermissions, getLocalRoles } from '@/services/users.service';
+import * as usersService from '@/services/users.service';
+import { getUserEffectivePermissions, getLocalRoles, DEFAULT_ROLES, User } from '@/services/users.service';
 import { recordAuditLog } from '@/services/audit.service';
 import toast from 'react-hot-toast';
+
+const SEEDED_FALLBACK_USERS: User[] = [
+  {
+    id: 'u-admin',
+    username: 'admin',
+    email: 'admin@ferreteria.local',
+    firstName: 'Administrador',
+    lastName: 'Principal',
+    isActive: true,
+    userRoles: [{ roleId: 'r-admin', role: DEFAULT_ROLES[0] }],
+    customPermissions: ['*'],
+  },
+  {
+    id: 'u-cajero',
+    username: 'cajero',
+    email: 'cajero@ferreteria.local',
+    firstName: 'Juan',
+    lastName: 'Pérez',
+    isActive: true,
+    userRoles: [{ roleId: 'r-vendedor', role: DEFAULT_ROLES[2] }],
+    customPermissions: ['pos:discount'],
+  },
+  {
+    id: 'u-deposito',
+    username: 'deposito',
+    email: 'deposito@ferreteria.local',
+    firstName: 'Carlos',
+    lastName: 'López',
+    isActive: true,
+    userRoles: [{ roleId: 'r-deposito', role: DEFAULT_ROLES[3] }],
+  },
+  {
+    id: 'u-encargado',
+    username: 'encargado',
+    email: 'encargado@ferreteria.local',
+    firstName: 'Martín',
+    lastName: 'Gómez',
+    isActive: true,
+    userRoles: [{ roleId: 'r-encargado', role: DEFAULT_ROLES[1] }],
+  },
+];
+
+function resolveLocalUsers(): (User & { password?: string })[] {
+  if (typeof (usersService as any).getLocalUsers === 'function') {
+    return (usersService as any).getLocalUsers();
+  }
+  try {
+    const rawUsers = localStorage.getItem('ferreteria_local_users');
+    if (rawUsers) {
+      const parsed = JSON.parse(rawUsers);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return SEEDED_FALLBACK_USERS;
+}
 
 export default function LoginPage() {
   const [username, setUsername] = useState('admin');
@@ -28,14 +86,42 @@ export default function LoginPage() {
       // 1. Try real API authentication if backend is online
       try {
         const { data } = await authService.login(username, password);
-        if (data?.token && data?.user) {
-          token = data.token;
+        const resolvedToken = data?.token || data?.accessToken;
+        if (resolvedToken && data?.user) {
+          token = resolvedToken;
+          const resolvedRole = String(data.user.role || data.user.roles?.[0] || 'VENDEDOR');
+          const resolvedName =
+            data.user.name ||
+            [data.user.firstName, data.user.lastName].filter(Boolean).join(' ') ||
+            data.user.username ||
+            username;
+          const resolvedUsername = data.user.username || username;
+          const roles = getLocalRoles();
+
+          let resolvedPermissions: string[] = [];
+          if (Array.isArray(data.user.permissions) && data.user.permissions.length > 0) {
+            resolvedPermissions = data.user.permissions;
+          } else if (resolvedRole.toUpperCase() === 'ADMIN' || resolvedRole.toUpperCase() === 'ADMINISTRADOR') {
+            resolvedPermissions = ['*'];
+          } else if (Array.isArray(data.user.userRoles) && data.user.userRoles.length > 0) {
+            resolvedPermissions = getUserEffectivePermissions(data.user, roles);
+          } else {
+            const matchedRole = roles.find(
+              (r) =>
+                r.name.toLowerCase() === resolvedRole.toLowerCase() ||
+                r.name.toLowerCase().includes(resolvedRole.toLowerCase()) ||
+                r.id.toLowerCase() === `r-${resolvedRole.toLowerCase()}`
+            );
+            resolvedPermissions = matchedRole?.permissions || [];
+          }
+
           loggedUser = {
             id: data.user.id,
-            name: data.user.name,
-            email: data.user.email,
-            role: data.user.role,
-            permissions: data.user.role?.toUpperCase() === 'ADMIN' ? ['*'] : [],
+            username: resolvedUsername,
+            name: resolvedName,
+            email: data.user.email || `${resolvedUsername}@ferreteria.local`,
+            role: resolvedRole.toUpperCase(),
+            permissions: resolvedPermissions,
           };
         }
       } catch {
@@ -48,25 +134,34 @@ export default function LoginPage() {
         if (username.toLowerCase() === 'admin' && (password === 'admin123' || password === 'admin' || password === 'admin2026')) {
           loggedUser = {
             id: 'u-admin',
+            username: 'admin',
             name: 'Administrador Principal',
             email: 'admin@ferreteria.local',
             role: 'ADMIN',
             permissions: ['*'],
           };
         } else {
-          // Check locally registered users in browser storage
+          // Check locally registered / seeded users
           try {
-            const rawUsers = localStorage.getItem('ferreteria_local_users');
-            if (rawUsers) {
-              const users = JSON.parse(rawUsers);
-              const found = users.find((u: any) => u.username.toLowerCase() === username.toLowerCase());
-              if (found) {
+            const users = resolveLocalUsers();
+            const found = users.find((u) => u.username.toLowerCase() === username.toLowerCase().trim());
+            if (found) {
+              if (found.isActive === false) {
+                toast.error('Esta cuenta de usuario se encuentra desactivada.');
+                return;
+              }
+              const isPasswordValid = found.password
+                ? password === found.password
+                : password === '123456' || password === found.username || password === 'admin123';
+
+              if (isPasswordValid) {
                 const roles = getLocalRoles();
                 const permissions = getUserEffectivePermissions(found, roles);
                 const roleName = found.userRoles?.[0]?.role?.name || 'Vendedor';
                 loggedUser = {
                   id: found.id,
-                  name: `${found.firstName} ${found.lastName}`.trim() || found.username,
+                  username: found.username,
+                  name: `${found.firstName || ''} ${found.lastName || ''}`.trim() || found.username,
                   email: found.email,
                   role: roleName.toUpperCase(),
                   permissions,
@@ -82,13 +177,14 @@ export default function LoginPage() {
         try {
           recordAuditLog({
             userId: loggedUser.id,
+            username: loggedUser.username,
             user: loggedUser.name,
             role: loggedUser.role,
             action: 'LOGIN',
             entity: 'User',
             entityId: loggedUser.id,
             description: `Inicio de sesión exitoso como ${loggedUser.role} en terminal web`,
-            details: { username, role: loggedUser.role, timestamp: new Date().toISOString() },
+            details: { username: loggedUser.username || username, role: loggedUser.role, timestamp: new Date().toISOString() },
           });
         } catch {}
 
@@ -99,6 +195,7 @@ export default function LoginPage() {
         try {
           recordAuditLog({
             userId: 'guest',
+            username,
             user: 'Visitante (Fallido)',
             role: 'NONE',
             action: 'LOGIN_FAILED',

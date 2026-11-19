@@ -85,16 +85,7 @@ export const useOpenCashSession = () => {
       };
 
       saveLocalSession(newSession);
-      saveLocalMovements([
-        {
-          id: 'mov-' + Date.now(),
-          sessionId: newSession.id,
-          type: 'IN',
-          amount: Number(payload.openingBalance),
-          description: 'Apertura de caja (Fondo inicial)',
-          createdAt: new Date().toISOString(),
-        }
-      ]);
+      saveLocalMovements([]);
 
       return newSession;
     },

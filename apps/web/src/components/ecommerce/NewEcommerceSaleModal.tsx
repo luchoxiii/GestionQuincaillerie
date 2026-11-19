@@ -182,9 +182,12 @@ export function NewEcommerceSaleModal({
 
   // Calculations
   const subtotal = useMemo(() => items.reduce((acc, i) => acc + i.total, 0), [items]);
-  const taxAmount = useMemo(() => items.reduce((acc, i) => acc + (i.taxAmount || 0), 0), [items]);
+  const taxAmount = useMemo(
+    () => (fiscalType === 'NEGRO' ? 0 : items.reduce((acc, i) => acc + (i.taxAmount || 0), 0)),
+    [items, fiscalType]
+  );
   const discount = appliedCoupon ? appliedCoupon.discountAmount : 0;
-  const total = Math.max(0, subtotal - discount);
+  const total = Math.max(0, subtotal - discount + (Number(shippingCost) || 0));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -598,7 +601,7 @@ export function NewEcommerceSaleModal({
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" onClick={handleModalClose} className="w-full sm:w-auto">
                 Cancelar
               </Button>
               <Button type="submit" disabled={items.length === 0 || createSale.isPending} className="w-full sm:w-auto">

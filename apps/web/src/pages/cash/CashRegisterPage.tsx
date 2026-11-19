@@ -47,9 +47,12 @@ export function CashRegisterPage() {
 
   if (isSessionLoading) return <div className="p-6">Cargando datos de caja...</div>;
 
-  const ingresos = movements?.filter(m => m.type === 'IN').reduce((acc, m) => acc + Number(m.amount), 0) || 0;
+  const ingresos =
+    movements
+      ?.filter((m) => m.type === 'IN' && !m.description?.toLowerCase().includes('apertura de caja'))
+      .reduce((acc, m) => acc + Number(m.amount), 0) || 0;
   const egresos = movements?.filter(m => m.type === 'OUT').reduce((acc, m) => acc + Number(m.amount), 0) || 0;
-  const saldoTeorico = (Number(session?.openingBalance) || 0) + ingresos - egresos;
+  const saldoTeorico = Number(session?.openingBalance || 0) + ingresos - egresos;
 
   const handleOpenCash = async () => {
     const balance = parseFloat(openingBalance);

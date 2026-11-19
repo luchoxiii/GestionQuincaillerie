@@ -46,19 +46,40 @@ export default function NewPurchasePage() {
   const calculateTotal = () => items.reduce((acc, item) => acc + (calculateSubtotal(item) * (1 + item.taxRate / 100)), 0);
 
   const handleSubmit = () => {
-    if (!supplierId || !warehouseId || !invoiceNumber || items.length === 0) {
+    if (!supplierId || !warehouseId || !invoiceNumber.trim() || items.length === 0) {
       toast.error('Complete los datos principales y agregue al menos un producto');
       return;
     }
 
+    const hasInvalidItem = items.some(
+      (item) =>
+        !item.productId ||
+        typeof item.quantity !== 'number' ||
+        item.quantity <= 0 ||
+        typeof item.unitCost !== 'number' ||
+        item.unitCost < 0
+    );
+    if (hasInvalidItem) {
+      toast.error('Todos los renglones deben tener un producto seleccionado, cantidad mayor a 0 y costo válido');
+      return;
+    }
+
+    const enrichedItems = items.map((item) => {
+      const prod = products?.find((p: any) => p.id === item.productId);
+      return {
+        ...item,
+        productName: prod?.name || item.productName,
+      };
+    });
+
     createPurchase({
       supplierId,
       destinationWarehouseId: warehouseId,
-      invoiceNumber,
+      invoiceNumber: invoiceNumber.trim(),
       date,
       status: 'COMPLETED',
       total: calculateTotal(),
-      items,
+      items: enrichedItems,
       updateSellingPrices,
       paymentMethod,
       initialPaymentAmount: paymentMethod !== 'Cuenta Corriente' ? parseFloat(initialPayment) || calculateTotal() : 0,

@@ -48,6 +48,12 @@ export class ProductsController {
     return this.productsService.findByBarcode(code);
   }
 
+  @Get('export')
+  @RequirePermissions('products.export')
+  exportProducts() {
+    return this.productsService.exportProducts();
+  }
+
   @Get(':id')
   @RequirePermissions('products.view')
   findOne(@Param('id') id: string) {
@@ -67,19 +73,13 @@ export class ProductsController {
   }
 
   @Post('mass-price-update')
-  @RequirePermissions('products.edit')
+  @RequirePermissions('products.mass_price_update')
   massPriceUpdate(@Body() data: any) {
     return this.productsService.massPriceUpdate(data);
   }
 
-  @Get('export')
-  @RequirePermissions('products.view')
-  exportProducts() {
-    return this.productsService.exportProducts();
-  }
-
   @Post('import')
-  @RequirePermissions('products.create')
+  @RequirePermissions('products.import')
   importProducts(@Body() products: any[]) {
     return this.productsService.importProducts(products);
   }

@@ -43,10 +43,13 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
   // If query is an exact barcode match, select automatically
   useEffect(() => {
     if (query.trim().length >= 3 && products.length > 0) {
+      const qLower = query.trim().toLowerCase();
       const exactMatch = products.find(
         (p: any) =>
-          (p.sku && p.sku.toLowerCase() === query.trim().toLowerCase()) ||
-          (p.code && p.code.toLowerCase() === query.trim().toLowerCase())
+          (p.sku && p.sku.toLowerCase() === qLower) ||
+          (p.code && p.code.toLowerCase() === qLower) ||
+          (p.barcode && String(p.barcode).toLowerCase() === qLower) ||
+          p.barcodes?.some((b: any) => String(b.barcode || '').toLowerCase() === qLower)
       );
       if (exactMatch) {
         setSelectedProduct(exactMatch);
@@ -61,12 +64,13 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
   const handleAddToCart = () => {
     if (!selectedProduct) return;
     const price = Number(selectedProduct.price ?? selectedProduct.salePrice ?? 0);
+    const taxRate = Number(selectedProduct.taxRate ?? selectedProduct.taxes?.[0]?.tax?.rate ?? 21);
     addItem({
       id: selectedProduct.id,
       name: selectedProduct.name,
       sku: selectedProduct.sku || selectedProduct.code || '',
       price: price,
-      taxRate: selectedProduct.taxRate ?? 21,
+      taxRate,
     });
     if (onAddToCart) {
       onAddToCart(selectedProduct);
@@ -239,7 +243,7 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
                       Precio de Lista (Contado / Tarjeta)
                     </span>
                     <Badge className="bg-blue-500/30 text-blue-200 border-none text-[10px]">
-                      IVA {activeProduct.taxRate ?? 21}% Inc.
+                      IVA {Number(activeProduct.taxRate ?? activeProduct.taxes?.[0]?.tax?.rate ?? 21)}% Inc.
                     </Badge>
                   </div>
                   <div className="my-2">

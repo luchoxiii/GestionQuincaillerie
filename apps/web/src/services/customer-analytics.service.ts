@@ -280,7 +280,9 @@ export const buildCustomerProfile = (
   sales: any[],
   dateRange?: { startDate?: string; endDate?: string }
 ): CustomerProfile => {
-  let customerSales = sales.filter((s) => s.customerId === customer.id);
+  let customerSales = sales.filter(
+    (s) => s.customerId === customer.id && s.status !== 'VOIDED' && s.status !== 'CANCELLED'
+  );
   const now = Date.now();
   const startMs = dateRange?.startDate ? new Date(dateRange.startDate + 'T00:00:00').getTime() : null;
   const endMs = dateRange?.endDate ? new Date(dateRange.endDate + 'T23:59:59.999').getTime() : null;
@@ -380,7 +382,12 @@ export const buildCustomerProfile = (
   let recommendedCampaign = 'Campaña de cross-selling en rubros generales.';
   let suggestedCouponCode = 'FERRETERIA10';
 
-  if (customer.creditLimit >= 300000 || customer.taxCondition === 'RESPONSABLE_INSCRIPTO' && monetaryLtv > 150000) {
+  if (
+    !customer.isBanned &&
+    monetaryLtv > 0 &&
+    ((customer.creditLimit >= 300000 && monetaryLtv >= 50000) ||
+      (customer.taxCondition === 'RESPONSABLE_INSCRIPTO' && monetaryLtv > 150000))
+  ) {
     segment = 'BIG_BUILDER';
     segmentLabel = 'Grandes Obras y Empresas';
     segmentDescription = 'Constructoras y talleres con compras industriales y cuenta corriente.';
@@ -596,10 +603,12 @@ export const exportMLDatasetCsv = (
     const credLimit = Number(p.customer.creditLimit || 0);
     const balance = Number(p.customer.currentBalance || p.customer.balance || 0);
     const creditRatio = credLimit > 0 ? Math.min(1, balance / credLimit) : 0;
+    const regDate = p.customer.createdAt ? new Date(p.customer.createdAt).getTime() : Date.now() - (p.rfm.recencyDays + 30) * 86400000;
+    const registrationDays = Math.max(1, Math.round((Date.now() - regDate) / 86400000));
 
     return [
       p.customer.id,
-      `"${p.customer.name.replace(/"/g, '""')}"`,
+      p.customer.name,
       p.customer.taxCondition || 'CONSUMIDOR_FINAL',
       p.customer.isBanned ? 1 : 0,
       credLimit.toFixed(2),
@@ -607,7 +616,7 @@ export const exportMLDatasetCsv = (
       creditRatio.toFixed(3),
       startLabel,
       endLabel,
-      p.rfm.recencyDays + 30, // approximate account age
+      registrationDays,
       p.rfm.recencyDays,
       p.rfm.frequency,
       p.rfm.monetaryLtv.toFixed(2),
@@ -615,8 +624,8 @@ export const exportMLDatasetCsv = (
       p.rfm.maxOrderValue.toFixed(2),
       p.rfm.monthlyFrequency.toFixed(2),
       p.rfm.avgDaysBetweenPurchases,
-      `"${p.marketing.preferredCategory}"`,
-      `"${p.marketing.preferredPaymentMethod}"`,
+      p.marketing.preferredCategory,
+      p.marketing.preferredPaymentMethod,
       p.churn.score,
       p.marketing.segment,
       p.churn.isChurned ? 1 : 0

@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsArray, ValidateNested, IsUUID } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsArray, ValidateNested, IsUUID, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateSalePaymentDto {
@@ -6,6 +6,7 @@ export class CreateSalePaymentDto {
   methodId!: string;
 
   @IsNumber()
+  @Min(0.01)
   @Type(() => Number)
   amount!: number;
 
@@ -19,8 +20,27 @@ export class CreateSaleItemDto {
   productId!: string;
 
   @IsNumber()
+  @Min(0.01)
   @Type(() => Number)
   quantity!: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  unitPrice?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  discount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  taxRate?: number;
 }
 
 export class CreateSaleDto {
@@ -48,4 +68,36 @@ export class CreateSaleDto {
   @IsUUID()
   @IsOptional()
   cashSessionId?: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  discount?: number;
+
+  @IsString()
+  @IsOptional()
+  fiscalType?: string;
+
+  @IsString()
+  @IsOptional()
+  couponCode?: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  subtotal?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  taxAmount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  total?: number;
 }

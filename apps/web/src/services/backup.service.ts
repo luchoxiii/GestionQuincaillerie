@@ -33,6 +33,10 @@ export interface ErpBackupSnapshot {
     users: any[];
     roles: any[];
     ecommerceOrders: any[];
+    stores?: any[];
+    invoices?: any[];
+    stock?: any[];
+    stockMovements?: any[];
   };
 }
 
@@ -46,12 +50,16 @@ const STORAGE_KEYS = {
   categories: 'ferreteria_local_categories',
   purchases: 'ferreteria_local_purchases',
   suppliers: 'ferreteria_local_suppliers',
-  settings: 'ferreteria_company_settings',
-  coupons: 'ferreteria_local_coupons',
+  settings: 'ferreteria_local_settings',
+  coupons: 'ferreteria_marketing_coupons',
   auditLogs: 'ferreteria_local_audit_logs',
-  users: 'ferreteria_custom_users',
-  roles: 'ferreteria_custom_roles',
+  users: 'ferreteria_local_users',
+  roles: 'ferreteria_local_roles',
   ecommerceOrders: 'ferreteria_ecommerce_orders',
+  stores: 'ferreteria_local_stores',
+  invoices: 'ferreteria_local_invoices',
+  stock: 'ferreteria_local_stock',
+  stockMovements: 'ferreteria_local_stock_movements',
 };
 
 function readLocalStorageArray(key: string): any[] {
@@ -88,12 +96,22 @@ export function createBackupSnapshot(exportedBy = 'Administrador'): ErpBackupSna
   const categories = readLocalStorageArray(STORAGE_KEYS.categories);
   const purchases = readLocalStorageArray(STORAGE_KEYS.purchases);
   const suppliers = readLocalStorageArray(STORAGE_KEYS.suppliers);
-  const settings = readLocalStorageObject(STORAGE_KEYS.settings);
-  const coupons = readLocalStorageArray(STORAGE_KEYS.coupons);
+  const settings = readLocalStorageObject(STORAGE_KEYS.settings) || readLocalStorageObject('ferreteria_company_settings');
+  const coupons = readLocalStorageArray(STORAGE_KEYS.coupons).length > 0
+    ? readLocalStorageArray(STORAGE_KEYS.coupons)
+    : readLocalStorageArray('ferreteria_local_coupons');
   const auditLogs = readLocalStorageArray(STORAGE_KEYS.auditLogs);
-  const users = readLocalStorageArray(STORAGE_KEYS.users);
-  const roles = readLocalStorageArray(STORAGE_KEYS.roles);
+  const users = readLocalStorageArray(STORAGE_KEYS.users).length > 0
+    ? readLocalStorageArray(STORAGE_KEYS.users)
+    : readLocalStorageArray('ferreteria_custom_users');
+  const roles = readLocalStorageArray(STORAGE_KEYS.roles).length > 0
+    ? readLocalStorageArray(STORAGE_KEYS.roles)
+    : readLocalStorageArray('ferreteria_custom_roles');
   const ecommerceOrders = readLocalStorageArray(STORAGE_KEYS.ecommerceOrders);
+  const stores = readLocalStorageArray(STORAGE_KEYS.stores);
+  const invoices = readLocalStorageArray(STORAGE_KEYS.invoices);
+  const stock = readLocalStorageArray(STORAGE_KEYS.stock);
+  const stockMovements = readLocalStorageArray(STORAGE_KEYS.stockMovements);
 
   const now = new Date();
 
@@ -130,6 +148,10 @@ export function createBackupSnapshot(exportedBy = 'Administrador'): ErpBackupSna
       users,
       roles,
       ecommerceOrders,
+      stores,
+      invoices,
+      stock,
+      stockMovements,
     },
   };
 }
@@ -191,68 +213,91 @@ export function validateBackupFile(jsonString: string): {
 export function restoreBackupSnapshot(snapshot: ErpBackupSnapshot): {
   success: boolean;
   stats: Record<string, number>;
+  error?: string;
 } {
-  const { data } = snapshot;
+  try {
+    const { data } = snapshot;
 
-  if (Array.isArray(data.products)) {
-    localStorage.setItem(STORAGE_KEYS.products, JSON.stringify(data.products));
-  }
-  if (Array.isArray(data.customers)) {
-    localStorage.setItem(STORAGE_KEYS.customers, JSON.stringify(data.customers));
-  }
-  if (Array.isArray(data.sales)) {
-    localStorage.setItem(STORAGE_KEYS.sales, JSON.stringify(data.sales));
-  }
-  if (Array.isArray(data.quotes)) {
-    localStorage.setItem(STORAGE_KEYS.quotes, JSON.stringify(data.quotes));
-  }
-  if (data.cashSession !== undefined) {
-    localStorage.setItem(STORAGE_KEYS.cashSession, JSON.stringify(data.cashSession));
-  }
-  if (Array.isArray(data.cashMovements)) {
-    localStorage.setItem(STORAGE_KEYS.cashMovements, JSON.stringify(data.cashMovements));
-  }
-  if (Array.isArray(data.categories)) {
-    localStorage.setItem(STORAGE_KEYS.categories, JSON.stringify(data.categories));
-  }
-  if (Array.isArray(data.purchases)) {
-    localStorage.setItem(STORAGE_KEYS.purchases, JSON.stringify(data.purchases));
-  }
-  if (Array.isArray(data.suppliers)) {
-    localStorage.setItem(STORAGE_KEYS.suppliers, JSON.stringify(data.suppliers));
-  }
-  if (data.settings) {
-    localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(data.settings));
-  }
-  if (Array.isArray(data.coupons)) {
-    localStorage.setItem(STORAGE_KEYS.coupons, JSON.stringify(data.coupons));
-  }
-  if (Array.isArray(data.auditLogs)) {
-    localStorage.setItem(STORAGE_KEYS.auditLogs, JSON.stringify(data.auditLogs));
-  }
-  if (Array.isArray(data.users)) {
-    localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(data.users));
-  }
-  if (Array.isArray(data.roles)) {
-    localStorage.setItem(STORAGE_KEYS.roles, JSON.stringify(data.roles));
-  }
-  if (Array.isArray(data.ecommerceOrders)) {
-    localStorage.setItem(STORAGE_KEYS.ecommerceOrders, JSON.stringify(data.ecommerceOrders));
-  }
+    if (Array.isArray(data.products)) {
+      localStorage.setItem(STORAGE_KEYS.products, JSON.stringify(data.products));
+    }
+    if (Array.isArray(data.customers)) {
+      localStorage.setItem(STORAGE_KEYS.customers, JSON.stringify(data.customers));
+    }
+    if (Array.isArray(data.sales)) {
+      localStorage.setItem(STORAGE_KEYS.sales, JSON.stringify(data.sales));
+    }
+    if (Array.isArray(data.quotes)) {
+      localStorage.setItem(STORAGE_KEYS.quotes, JSON.stringify(data.quotes));
+    }
+    if (data.cashSession !== undefined) {
+      localStorage.setItem(STORAGE_KEYS.cashSession, JSON.stringify(data.cashSession));
+    }
+    if (Array.isArray(data.cashMovements)) {
+      localStorage.setItem(STORAGE_KEYS.cashMovements, JSON.stringify(data.cashMovements));
+    }
+    if (Array.isArray(data.categories)) {
+      localStorage.setItem(STORAGE_KEYS.categories, JSON.stringify(data.categories));
+    }
+    if (Array.isArray(data.purchases)) {
+      localStorage.setItem(STORAGE_KEYS.purchases, JSON.stringify(data.purchases));
+    }
+    if (Array.isArray(data.suppliers)) {
+      localStorage.setItem(STORAGE_KEYS.suppliers, JSON.stringify(data.suppliers));
+    }
+    if (data.settings) {
+      localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(data.settings));
+    }
+    if (Array.isArray(data.coupons)) {
+      localStorage.setItem(STORAGE_KEYS.coupons, JSON.stringify(data.coupons));
+    }
+    if (Array.isArray(data.auditLogs)) {
+      localStorage.setItem(STORAGE_KEYS.auditLogs, JSON.stringify(data.auditLogs));
+    }
+    if (Array.isArray(data.users)) {
+      localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(data.users));
+    }
+    if (Array.isArray(data.roles)) {
+      localStorage.setItem(STORAGE_KEYS.roles, JSON.stringify(data.roles));
+    }
+    if (Array.isArray(data.ecommerceOrders)) {
+      localStorage.setItem(STORAGE_KEYS.ecommerceOrders, JSON.stringify(data.ecommerceOrders));
+    }
+    if (Array.isArray(data.stores)) {
+      localStorage.setItem(STORAGE_KEYS.stores, JSON.stringify(data.stores));
+    }
+    if (Array.isArray(data.invoices)) {
+      localStorage.setItem(STORAGE_KEYS.invoices, JSON.stringify(data.invoices));
+    }
+    if (Array.isArray(data.stock)) {
+      localStorage.setItem(STORAGE_KEYS.stock, JSON.stringify(data.stock));
+    }
+    if (Array.isArray(data.stockMovements)) {
+      localStorage.setItem(STORAGE_KEYS.stockMovements, JSON.stringify(data.stockMovements));
+    }
 
-  // Notificar a las pestañas y componentes
-  window.dispatchEvent(new Event('storage'));
+    // Notificar a las pestañas y componentes
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('storage'));
+    }
 
-  return {
-    success: true,
-    stats: {
-      products: data.products?.length || 0,
-      customers: data.customers?.length || 0,
-      sales: data.sales?.length || 0,
-      quotes: data.quotes?.length || 0,
-      purchases: data.purchases?.length || 0,
-      suppliers: data.suppliers?.length || 0,
-      categories: data.categories?.length || 0,
-    },
-  };
+    return {
+      success: true,
+      stats: {
+        products: data.products?.length || 0,
+        customers: data.customers?.length || 0,
+        sales: data.sales?.length || 0,
+        quotes: data.quotes?.length || 0,
+        purchases: data.purchases?.length || 0,
+        suppliers: data.suppliers?.length || 0,
+        categories: data.categories?.length || 0,
+      },
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      stats: {},
+      error: err?.message || 'Error al persistir copia en localStorage (cuota de almacenamiento excedida o acceso restringido)',
+    };
+  }
 }

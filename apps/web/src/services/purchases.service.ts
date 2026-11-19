@@ -1,5 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
+import { getLocalProducts } from './products.service';
+import { getLocalSuppliers } from './suppliers.service';
+import { getLocalStock } from './inventory.service';
+import { recordAuditLog } from './audit.service';
+import { useAuthStore } from '@/stores/auth.store';
 
 export interface PurchaseItem {
   productId: string;
@@ -29,13 +34,14 @@ const INITIAL_PURCHASES: Purchase[] = [
   { id: '2', purchaseNumber: 'C-002', invoiceNumber: 'B-0002-00009876', supplierId: '2', supplier: 'Herramientas del Sur SRL', destinationWarehouseId: 'wh1', date: '2023-10-11', total: 45000, status: 'PENDING', items: [] },
 ];
 
-const getLocalPurchases = (): Purchase[] => {
+export const getLocalPurchases = (): Purchase[] => {
   try {
     const raw = localStorage.getItem(STORAGE_PURCHASES_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
+    localStorage.setItem(STORAGE_PURCHASES_KEY, JSON.stringify(INITIAL_PURCHASES));
   } catch (e) {
     console.error('Error reading localStorage for purchases:', e);
   }
@@ -98,17 +104,13 @@ export const useCreatePurchase = () => {
       }
 
       const list = getLocalPurchases();
+      const sups = getLocalSuppliers();
+      const prods = getLocalProducts();
       
       // Resolve supplier name
       let supplierName = 'Proveedor General';
-      try {
-        const supsRaw = localStorage.getItem('ferreteria_local_suppliers');
-        if (supsRaw) {
-          const sups = JSON.parse(supsRaw);
-          const found = sups.find((s: any) => s.id === payload.supplierId);
-          if (found) supplierName = found.name;
-        }
-      } catch {}
+      const foundSup = sups.find((s: any) => s.id === payload.supplierId);
+      if (foundSup) supplierName = foundSup.name;
 
       const newPurchase: Purchase = {
         id: created?.id || 'pur-' + Date.now(),
@@ -128,9 +130,7 @@ export const useCreatePurchase = () => {
 
       // Update products stock & prices
       try {
-        const prodsRaw = localStorage.getItem('ferreteria_local_products');
-        if (prodsRaw && payload.items) {
-          const prods = JSON.parse(prodsRaw);
+        if (payload.items) {
           for (const item of payload.items) {
             const p = prods.find((prod: any) => prod.id === item.productId);
             if (p) {
@@ -138,11 +138,13 @@ export const useCreatePurchase = () => {
               p.totalStock = currentStock + (item.quantity || 0);
               p.stock = p.totalStock;
 
-              if (payload.updateSellingPrices && item.unitCost > 0) {
+              if (item.unitCost > 0) {
                 p.costPrice = item.unitCost;
-                const margin = p.profitMargin ?? 35;
-                p.salePrice = Math.round(item.unitCost * (1 + margin / 100) * 100) / 100;
-                p.price = p.salePrice;
+                if (payload.updateSellingPrices) {
+                  const margin = p.profitMargin ?? 35;
+                  p.salePrice = Math.round(item.unitCost * (1 + margin / 100) * 100) / 100;
+                  p.price = p.salePrice;
+                }
               }
             }
           }
@@ -154,21 +156,24 @@ export const useCreatePurchase = () => {
 
       // Update warehouse stock & Kardex
       try {
-        const stockRaw = localStorage.getItem('ferreteria_local_stock');
+        const stockList = getLocalStock();
         const movsRaw = localStorage.getItem('ferreteria_local_stock_movements');
-        const stockList = stockRaw ? JSON.parse(stockRaw) : [];
         const movsList = movsRaw ? JSON.parse(movsRaw) : [];
 
         if (payload.items) {
           for (const item of payload.items) {
+            const p = prods.find((prod: any) => prod.id === item.productId);
+            const prodName = p?.name || 'Artículo';
+            const prodSku = p?.sku || p?.code || 'ART';
             const s = stockList.find((st: any) => st.productId === item.productId);
             if (s) {
               s.quantity = (s.quantity || 0) + item.quantity;
             } else {
               stockList.push({
                 productId: item.productId,
-                product: 'Artículo',
-                sku: 'ART',
+                warehouseId: payload.destinationWarehouseId || 'wh1',
+                product: prodName,
+                sku: prodSku,
                 warehouse: 'Depósito Principal',
                 quantity: item.quantity,
               });
@@ -179,7 +184,7 @@ export const useCreatePurchase = () => {
               productId: item.productId,
               warehouseId: payload.destinationWarehouseId || 'wh1',
               type: 'IN',
-              product: 'Artículo',
+              product: prodName,
               quantity: item.quantity,
               date: new Date().toISOString(),
               reference: `Compra ${newPurchase.purchaseNumber} (Fact. ${newPurchase.invoiceNumber})`,
@@ -195,14 +200,10 @@ export const useCreatePurchase = () => {
       // Update supplier debt if Cuenta Corriente
       if (payload.paymentMethod === 'Cuenta Corriente' && payload.supplierId) {
         try {
-          const supsRaw = localStorage.getItem('ferreteria_local_suppliers');
-          if (supsRaw) {
-            const sups = JSON.parse(supsRaw);
-            const sup = sups.find((s: any) => s.id === payload.supplierId);
-            if (sup) {
-              sup.debtBalance = (sup.debtBalance || 0) + (payload.total || 0);
-              localStorage.setItem('ferreteria_local_suppliers', JSON.stringify(sups));
-            }
+          const sup = sups.find((s: any) => s.id === payload.supplierId);
+          if (sup) {
+            sup.debtBalance = (sup.debtBalance || 0) + (payload.total || 0);
+            localStorage.setItem('ferreteria_local_suppliers', JSON.stringify(sups));
           }
         } catch {}
       }
@@ -210,27 +211,44 @@ export const useCreatePurchase = () => {
       // Record cash egreso if paid in cash
       if (payload.paymentMethod === 'Efectivo') {
         try {
-          const cashKey = 'ferreteria_local_cash_sessions';
-          const cashRaw = localStorage.getItem(cashKey);
-          if (cashRaw) {
-            const sessions = JSON.parse(cashRaw);
-            const activeSession = sessions.find((s: any) => s.status === 'OPEN');
-            if (activeSession) {
-              const movsKey = 'ferreteria_local_cash_movements_' + activeSession.id;
-              const curMovsRaw = localStorage.getItem(movsKey);
-              const curMovs = curMovsRaw ? JSON.parse(curMovsRaw) : [];
-              curMovs.unshift({
-                id: 'cmov-' + Date.now(),
-                type: 'OUT',
-                amount: payload.initialPaymentAmount || payload.total || 0,
-                description: `Pago compra ${newPurchase.purchaseNumber}`,
-                createdAt: new Date().toISOString(),
-              });
-              localStorage.setItem(movsKey, JSON.stringify(curMovs));
-            }
-          }
+          const cashRaw = localStorage.getItem('ferreteria_local_cash_session');
+          const activeSession = cashRaw ? JSON.parse(cashRaw) : null;
+          const movsKey = 'ferreteria_local_cash_movements';
+          const curMovsRaw = localStorage.getItem(movsKey);
+          const curMovs = curMovsRaw ? JSON.parse(curMovsRaw) : [];
+          curMovs.unshift({
+            id: 'cmov-' + Date.now(),
+            sessionId: activeSession?.id || 'sess-local',
+            type: 'OUT',
+            amount: payload.initialPaymentAmount || payload.total || 0,
+            description: `Pago compra ${newPurchase.purchaseNumber} (${supplierName})`,
+            createdAt: new Date().toISOString(),
+          });
+          localStorage.setItem(movsKey, JSON.stringify(curMovs));
         } catch {}
       }
+
+      // Record Audit Log
+      const currentUser = useAuthStore.getState().user;
+      recordAuditLog({
+        userId: currentUser?.id || 'u-encargado',
+        username: currentUser?.username || 'encargado',
+        user: currentUser?.name || 'Encargado de Compras',
+        role: currentUser?.role || 'ENCARGADO',
+        action: 'CREATE',
+        entity: 'Purchase',
+        entityId: newPurchase.id,
+        description: `Registró compra ${newPurchase.purchaseNumber} (Fact. ${newPurchase.invoiceNumber}) a ${supplierName} por $${(newPurchase.total || 0).toLocaleString()}`,
+        details: {
+          purchaseNumber: newPurchase.purchaseNumber,
+          invoiceNumber: newPurchase.invoiceNumber,
+          supplierId: newPurchase.supplierId,
+          supplier: supplierName,
+          total: newPurchase.total,
+          paymentMethod: payload.paymentMethod,
+          itemsCount: newPurchase.items?.length || 0,
+        },
+      });
 
       return created || newPurchase;
     },
@@ -240,7 +258,8 @@ export const useCreatePurchase = () => {
       queryClient.invalidateQueries({ queryKey: ['stock'] });
       queryClient.invalidateQueries({ queryKey: ['stockMovements'] });
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-      queryClient.invalidateQueries({ queryKey: ['cash'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-movements'] });
     },
   });
 };

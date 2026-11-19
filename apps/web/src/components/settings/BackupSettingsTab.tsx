@@ -53,6 +53,7 @@ export function BackupSettingsTab() {
   const [isLoadingGDriveFiles, setIsLoadingGDriveFiles] = useState(false);
   const [gdriveFiles, setGdriveFiles] = useState<GoogleDriveBackupFile[]>([]);
   const [showGuide, setShowGuide] = useState(false);
+  const oauthIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     // Generar resumen inicial del sistema
@@ -62,6 +63,12 @@ export function BackupSettingsTab() {
     if (isConnected && tokenInput) {
       loadGoogleDriveFiles(tokenInput);
     }
+
+    return () => {
+      if (oauthIntervalRef.current) {
+        clearInterval(oauthIntervalRef.current);
+      }
+    };
   }, []);
 
   const handleDownloadLocalBackup = () => {
@@ -211,10 +218,14 @@ export function BackupSettingsTab() {
     if (!popup) {
       window.location.href = authUrl;
     } else {
-      const checkTimer = setInterval(() => {
+      if (oauthIntervalRef.current) {
+        clearInterval(oauthIntervalRef.current);
+      }
+      oauthIntervalRef.current = setInterval(() => {
         try {
           if (popup.closed) {
-            clearInterval(checkTimer);
+            if (oauthIntervalRef.current) clearInterval(oauthIntervalRef.current);
+            oauthIntervalRef.current = null;
             return;
           }
           const hash = popup.location.hash;
@@ -223,7 +234,8 @@ export function BackupSettingsTab() {
             const token = params.get('access_token');
             if (token) {
               popup.close();
-              clearInterval(checkTimer);
+              if (oauthIntervalRef.current) clearInterval(oauthIntervalRef.current);
+              oauthIntervalRef.current = null;
               setTokenInput(token);
               saveGoogleToken(token, true);
               setIsConnected(true);

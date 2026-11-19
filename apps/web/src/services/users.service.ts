@@ -80,6 +80,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  password?: string;
   firstName: string;
   lastName: string;
   isActive: boolean;
@@ -244,7 +245,7 @@ const INITIAL_USERS: User[] = [
   },
 ];
 
-const getLocalUsers = (): User[] => {
+export const getLocalUsers = (): User[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_USERS);
     if (raw) {
@@ -253,13 +254,14 @@ const getLocalUsers = (): User[] => {
         return parsed;
       }
     }
+    localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(INITIAL_USERS));
   } catch (e) {
     console.error('Error reading localStorage for users:', e);
   }
   return INITIAL_USERS;
 };
 
-const saveLocalUsers = (users: User[]) => {
+export const saveLocalUsers = (users: User[]) => {
   try {
     localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
   } catch (e) {
@@ -366,6 +368,7 @@ export const useCreateUser = () => {
         id: created?.id || 'usr-' + Date.now(),
         username: payload.username,
         email: payload.email,
+        password: payload.password || '123456',
         firstName: payload.firstName,
         lastName: payload.lastName,
         isActive: payload.isActive !== false,
@@ -381,12 +384,15 @@ export const useCreateUser = () => {
       saveLocalUsers([newUser, ...list.filter((u) => u.id !== newUser.id)]);
 
       // Audit Log entry
-      const actor = useAuthStore.getState().user?.name || 'Administrador Principal';
-      const actorId = useAuthStore.getState().user?.id || 'u-admin';
+      const currentUser = useAuthStore.getState().user;
+      const actor = currentUser?.name || 'Administrador Principal';
+      const actorId = currentUser?.id || 'u-admin';
+      const actorUsername = currentUser?.username || 'admin';
       recordAuditLog({
         userId: actorId,
+        username: actorUsername,
         user: actor,
-        role: 'ADMIN',
+        role: currentUser?.role || 'ADMIN',
         action: 'CREATE',
         entity: 'User',
         entityId: newUser.id,
@@ -431,6 +437,7 @@ export const useUpdateUser = () => {
         const updatedUser: User = {
           ...current,
           ...payload,
+          password: payload.password ? payload.password : current.password,
           firstName: payload.firstName !== undefined ? payload.firstName : current.firstName,
           lastName: payload.lastName !== undefined ? payload.lastName : current.lastName,
           email: payload.email !== undefined ? payload.email : current.email,
@@ -445,12 +452,15 @@ export const useUpdateUser = () => {
         saveLocalUsers([...list]);
 
         // Audit Log entry
-        const actor = useAuthStore.getState().user?.name || 'Administrador Principal';
-        const actorId = useAuthStore.getState().user?.id || 'u-admin';
+        const currentUser = useAuthStore.getState().user;
+        const actor = currentUser?.name || 'Administrador Principal';
+        const actorId = currentUser?.id || 'u-admin';
+        const actorUsername = currentUser?.username || 'admin';
         recordAuditLog({
           userId: actorId,
+          username: actorUsername,
           user: actor,
-          role: 'ADMIN',
+          role: currentUser?.role || 'ADMIN',
           action: 'UPDATE',
           entity: 'User',
           entityId: id,
@@ -484,12 +494,15 @@ export const useDeleteUser = () => {
         saveLocalUsers([...list]);
 
         // Audit Log entry
-        const actor = useAuthStore.getState().user?.name || 'Administrador Principal';
-        const actorId = useAuthStore.getState().user?.id || 'u-admin';
+        const currentUser = useAuthStore.getState().user;
+        const actor = currentUser?.name || 'Administrador Principal';
+        const actorId = currentUser?.id || 'u-admin';
+        const actorUsername = currentUser?.username || 'admin';
         recordAuditLog({
           userId: actorId,
+          username: actorUsername,
           user: actor,
-          role: 'ADMIN',
+          role: currentUser?.role || 'ADMIN',
           action: 'DELETE',
           entity: 'User',
           entityId: id,

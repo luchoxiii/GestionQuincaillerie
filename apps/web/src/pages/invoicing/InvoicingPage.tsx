@@ -608,7 +608,10 @@ export default function InvoicingPage() {
                           >
                             <Eye className="w-4 h-4 text-slate-600" />
                           </Button>
-                          {isBlanco && (
+                          {isBlanco &&
+                            inv.status !== 'ANULADO' &&
+                            inv.letter !== 'NC' &&
+                            !inv.type?.startsWith('Nota de Crédito') && (
                             <Button 
                               variant="ghost" 
                               size="icon" 

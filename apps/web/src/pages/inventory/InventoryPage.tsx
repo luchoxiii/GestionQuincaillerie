@@ -13,9 +13,15 @@ import toast from 'react-hot-toast';
 export default function InventoryPage() {
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
 
   const { data: stockData = [], isLoading: stockLoading } = useStock();
   const { data: movementsData = [], isLoading: movLoading } = useStockMovements();
+
+  const transferMovements = (movementsData || []).filter(
+    (m: any) => m.type === 'TRANSFER' || m.reference?.toLowerCase().includes('transferencia')
+  );
 
   const handleExportStockCSV = () => {
     if (!stockData || stockData.length === 0) {
@@ -65,7 +71,16 @@ export default function InventoryPage() {
           <Button variant="outline" onClick={handleExportKardexCSV}>
             <Download className="mr-2 h-4 w-4" /> Exportar Kardex CSV
           </Button>
-          <Button variant="outline" onClick={() => setAdjustOpen(true)}>Ajustar Stock</Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSelectedProductId('');
+              setSelectedWarehouseId('');
+              setAdjustOpen(true);
+            }}
+          >
+            Ajustar Stock
+          </Button>
           <Button onClick={() => setTransferOpen(true)}>Nueva Transferencia</Button>
         </div>
       </div>
@@ -102,7 +117,17 @@ export default function InventoryPage() {
                           </Badge>
                         </td>
                         <td className="p-4 align-middle">
-                          <Button variant="ghost" size="sm" onClick={() => setAdjustOpen(true)}>Ajustar</Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedProductId(item.productId || '');
+                              setSelectedWarehouseId(item.warehouseId || 'wh1');
+                              setAdjustOpen(true);
+                            }}
+                          >
+                            Ajustar
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -143,13 +168,53 @@ export default function InventoryPage() {
           </Card>
         </TabsContent>
         <TabsContent value="transfer">
-          <Card className="p-8 text-center text-muted-foreground">
-            El historial de transferencias se mostrará aquí.
+          <Card className="p-4">
+            {movLoading ? (
+              <div className="p-8 text-center">Cargando...</div>
+            ) : transferMovements.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground">
+                No se registraron transferencias entre depósitos todavía.
+              </div>
+            ) : (
+              <div className="relative w-full overflow-auto">
+                <table className="w-full caption-bottom text-sm">
+                  <thead className="[&_tr]:border-b">
+                    <tr className="border-b transition-colors hover:bg-muted/50">
+                      <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Fecha</th>
+                      <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Tipo</th>
+                      <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Producto</th>
+                      <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Cantidad</th>
+                      <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Origen / Destino & Notas</th>
+                    </tr>
+                  </thead>
+                  <tbody className="[&_tr:last-child]:border-0">
+                    {transferMovements.map((mov: any) => (
+                      <tr key={mov.id} className="border-b transition-colors hover:bg-muted/50">
+                        <td className="p-4 align-middle">
+                          {mov.date ? new Date(mov.date).toLocaleDateString('es-AR') : '-'}
+                        </td>
+                        <td className="p-4 align-middle">
+                          <Badge variant="outline">{mov.type || 'TRANSFER'}</Badge>
+                        </td>
+                        <td className="p-4 align-middle font-medium">{mov.product}</td>
+                        <td className="p-4 align-middle font-semibold">{mov.quantity}</td>
+                        <td className="p-4 align-middle">{mov.reference || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Card>
         </TabsContent>
       </Tabs>
 
-      <StockAdjustModal open={adjustOpen} onOpenChange={setAdjustOpen} />
+      <StockAdjustModal
+        open={adjustOpen}
+        onOpenChange={setAdjustOpen}
+        initialProductId={selectedProductId}
+        initialWarehouseId={selectedWarehouseId}
+      />
       <StockTransferModal open={transferOpen} onOpenChange={setTransferOpen} />
     </div>
   );

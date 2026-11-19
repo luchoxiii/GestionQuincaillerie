@@ -6,16 +6,100 @@ import { Button } from '@/components/ui/button';
 import { Download, TrendingUp, DollarSign, PieChart, Percent, Calculator } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { useSalesReport, useProfitabilityReport, useIvaVentas, useIvaCompras, useInventoryValuation } from '../../services/reports.service';
+import { exportToCsv } from '@/lib/utils';
+import toast from 'react-hot-toast';
+
+const MONTH_OPTIONS = [
+  { value: '1', label: 'Enero' },
+  { value: '2', label: 'Febrero' },
+  { value: '3', label: 'Marzo' },
+  { value: '4', label: 'Abril' },
+  { value: '5', label: 'Mayo' },
+  { value: '6', label: 'Junio' },
+  { value: '7', label: 'Julio' },
+  { value: '8', label: 'Agosto' },
+  { value: '9', label: 'Septiembre' },
+  { value: '10', label: 'Octubre' },
+  { value: '11', label: 'Noviembre' },
+  { value: '12', label: 'Diciembre' },
+];
+
+const YEAR_OPTIONS = ['2024', '2025', '2026'];
 
 export default function ReportsPage() {
   const [salesPeriod, setSalesPeriod] = useState('30-days');
-  const [ivaMonth, setIvaMonth] = useState('10');
-  const [ivaYear, setIvaYear] = useState('2023');
+  const [ivaMonth, setIvaMonth] = useState(() => String(new Date().getMonth() + 1));
+  const [ivaYear, setIvaYear] = useState(() => {
+    const y = String(new Date().getFullYear());
+    return YEAR_OPTIONS.includes(y) ? y : '2026';
+  });
 
   const { data: salesData, isLoading: salesLoading } = useSalesReport(salesPeriod);
   const { data: profitabilityData, isLoading: profitabilityLoading } = useProfitabilityReport();
   const { data: ivaVentasData, isLoading: ivaVentasLoading } = useIvaVentas({ month: Number(ivaMonth), year: Number(ivaYear) });
   const { data: inventoryData, isLoading: inventoryLoading } = useInventoryValuation();
+
+  const formatChartDate = (val: any, short = false) => {
+    if (!val) return '';
+    if (typeof val === 'string' && val.includes(':')) return val;
+    if (['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].includes(String(val))) {
+      return String(val);
+    }
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    return short
+      ? d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+      : d.toLocaleDateString('es-AR');
+  };
+
+  const handleExportSalesCSV = () => {
+    const rows: (string | number)[][] = [
+      ['Fecha / Período', 'Ventas ($)', 'Costo ($)'],
+      ...(salesData?.chartData || []).map((pt: any) => [
+        pt.date,
+        Number(pt.sales || 0).toFixed(2),
+        Number(pt.cost || 0).toFixed(2),
+      ]),
+    ];
+    exportToCsv(`reporte_ventas_${salesPeriod}_${new Date().toISOString().split('T')[0]}`, rows);
+    toast.success('Reporte de ventas exportado a CSV');
+  };
+
+  const handleExportIvaCSV = () => {
+    const records = ivaVentasData?.records || [];
+    if (records.length === 0) {
+      toast.error('No hay registros de Libro IVA para exportar en este período');
+      return;
+    }
+    const headers = [
+      'Fecha',
+      'Tipo',
+      'Punto Venta',
+      'Número',
+      'CUIT/DNI',
+      'Razón Social',
+      'Neto Gravado',
+      'IVA 21%',
+      'IVA 10.5%',
+      'Total',
+      'CAE',
+    ];
+    const rows = records.map((r: any) => [
+      new Date(r.date).toLocaleDateString('es-AR'),
+      r.type,
+      r.pos,
+      r.number,
+      r.cuit,
+      r.name,
+      Number(r.net || 0).toFixed(2),
+      Number(r.iva21 || 0).toFixed(2),
+      Number(r.iva105 || 0).toFixed(2),
+      Number(r.total || 0).toFixed(2),
+      r.cae || '',
+    ]);
+    exportToCsv(`libro_iva_ventas_${ivaYear}_${ivaMonth.padStart(2, '0')}`, [headers, ...rows]);
+    toast.success('Libro IVA Ventas exportado a CSV');
+  };
 
   return (
     <div className="space-y-6">
@@ -44,7 +128,14 @@ export default function ReportsPage() {
                 <SelectItem value="this-year">Este año</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar PDF</Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={handleExportSalesCSV}>
+                <Download className="mr-2 h-4 w-4" /> Exportar a CSV / Excel
+              </Button>
+              <Button variant="outline" onClick={() => window.print()}>
+                <Download className="mr-2 h-4 w-4" /> Exportar PDF
+              </Button>
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -107,9 +198,9 @@ export default function ReportsPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={salesData?.chartData || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                    <XAxis dataKey="date" tickFormatter={(val) => new Date(val).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} />
+                    <XAxis dataKey="date" tickFormatter={(val) => formatChartDate(val, true)} />
                     <YAxis tickFormatter={(val) => `$${val / 1000}k`} />
-                    <Tooltip formatter={(value: number) => `$${value.toLocaleString('es-AR')}`} labelFormatter={(label) => new Date(label).toLocaleDateString('es-AR')} />
+                    <Tooltip formatter={(value: number) => `$${value.toLocaleString('es-AR')}`} labelFormatter={(label) => formatChartDate(label, false)} />
                     <Legend />
                     <Bar dataKey="sales" name="Ventas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="cost" name="Costo" fill="#ef4444" radius={[4, 4, 0, 0]} />
@@ -159,19 +250,26 @@ export default function ReportsPage() {
             <Select value={ivaMonth} onValueChange={setIvaMonth}>
               <SelectTrigger className="w-[150px]"><SelectValue placeholder="Mes" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">Enero</SelectItem>
-                <SelectItem value="9">Septiembre</SelectItem>
-                <SelectItem value="10">Octubre</SelectItem>
+                {MONTH_OPTIONS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={ivaYear} onValueChange={setIvaYear}>
               <SelectTrigger className="w-[120px]"><SelectValue placeholder="Año" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="2023">2023</SelectItem>
-                <SelectItem value="2024">2024</SelectItem>
+                {YEAR_OPTIONS.map((y) => (
+                  <SelectItem key={y} value={y}>
+                    {y}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" className="ml-auto"><Download className="mr-2 h-4 w-4" /> Exportar a CSV / Excel</Button>
+            <Button variant="outline" className="ml-auto" onClick={handleExportIvaCSV}>
+              <Download className="mr-2 h-4 w-4" /> Exportar a CSV / Excel
+            </Button>
           </div>
 
           <Card>
