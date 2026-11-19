@@ -10,14 +10,16 @@
 [![Redis](https://img.shields.io/badge/Redis-7.0-DC382D.svg?logo=redis)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker)](https://www.docker.com/)
 [![Podman](https://img.shields.io/badge/Podman-Rootless%20Ready-892CA0.svg?logo=podman)](https://podman.io/)
-[![Tests](https://img.shields.io/badge/Tests-186%20Passing-brightgreen.svg)](https://vitest.dev/)
+[![Tests](https://img.shields.io/badge/Tests-190%20Passing-brightgreen.svg)](https://vitest.dev/)
+[![Audit Report](https://img.shields.io/badge/Audit-Comprehensive%20Report-blue.svg)](./AUDIT_REPORT.md)
 
 [![WCAG 2.1](https://img.shields.io/badge/WCAG%202.1-AA%20%2F%20AAA-success.svg)](https://www.w3.org/WAI/standards-guidelines/wcag/)
 [![A11y Voice](https://img.shields.io/badge/A11y-Voice%20%26%20Audio-blueviolet.svg)](https://developer.mozilla.org/es/docs/Web/API/Web_Speech_API)
 [![OWASP Top 10](https://img.shields.io/badge/OWASP%20Top%2010-Compliant-success.svg)](https://owasp.org/)
 
 > **Sistema Integral de Gestión Comercial, Control de Stock Multidepósito, Facturación Dual AFIP, Terminal de Punto de Venta (POS) de Alta Velocidad y Sincronización Omnicanal para Ferreterías, Corralones y Distribuidores de Materiales.**  
-> Repositorio oficial: [https://github.com/luchoxiii/GestionQuincaillerie](https://github.com/luchoxiii/GestionQuincaillerie)
+> Repositorio oficial: [https://github.com/luchoxiii/GestionQuincaillerie](https://github.com/luchoxiii/GestionQuincaillerie)  
+> 🌐 **Documentación:** [Español (README.md)](./README.md) • [English (README.en.md)](./README.en.md) • [Português (README.pt.md)](./README.pt.md) • [Français (README.fr.md)](./README.fr.md) • [📋 Auditoría Técnica & OWASP (AUDIT_REPORT.md)](./AUDIT_REPORT.md)
 
 ---
 
