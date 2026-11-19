@@ -1,6 +1,8 @@
 import { useAuthStore } from '@/stores/auth.store';
 import { useAccessibilityStore } from '@/stores/accessibility.store';
 import { useStores, useActiveStore } from '@/services/stores.service';
+import { useI18n } from '@/i18n';
+import LanguageSwitcher from '@/components/layout/LanguageSwitcher';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -21,6 +23,7 @@ export default function Header({ onOpenPriceCheck }: HeaderProps) {
   const { openMenu } = useAccessibilityStore();
   const { data: stores = [] } = useStores();
   const { activeStore, changeStore } = useActiveStore();
+  const { t } = useI18n();
 
   return (
     <header className="flex h-16 items-center justify-between border-b bg-card px-6">
@@ -32,12 +35,12 @@ export default function Header({ onOpenPriceCheck }: HeaderProps) {
               variant="outline"
               size="sm"
               className="gap-2 border-emerald-300/80 bg-emerald-50/60 hover:bg-emerald-100 text-emerald-950 font-semibold shadow-xs"
-              title="Cambiar sucursal / tienda de trabajo"
+              title={t('header.branches')}
             >
               <StoreIcon className="h-4 w-4 text-emerald-700" />
               <div className="flex items-center gap-1.5 text-xs text-left">
                 <span className="font-bold text-emerald-900 truncate max-w-[140px]">
-                  {activeStore ? activeStore.name : 'Sucursal'}
+                  {activeStore ? activeStore.name : t('header.branch')}
                 </span>
                 {activeStore && (
                   <span className="hidden sm:inline text-[10px] bg-emerald-200/80 text-emerald-800 px-1.5 py-0.2 rounded font-mono font-medium">
@@ -50,8 +53,8 @@ export default function Header({ onOpenPriceCheck }: HeaderProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64">
             <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center justify-between">
-              <span>Sucursales & Tiendas</span>
-              <span className="text-[10px] font-mono">{stores.length} disponibles</span>
+              <span>{t('header.branches')}</span>
+              <span className="text-[10px] font-mono">{stores.length} {t('header.available')}</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {stores.map((s) => {
@@ -67,7 +70,7 @@ export default function Header({ onOpenPriceCheck }: HeaderProps) {
                       {s.name}
                       {s.isMain && (
                         <span className="text-[9px] bg-primary/10 text-primary px-1 rounded font-bold">
-                          Central
+                          {t('header.central')}
                         </span>
                       )}
                     </span>
@@ -90,7 +93,7 @@ export default function Header({ onOpenPriceCheck }: HeaderProps) {
             className="bg-amber-50 hover:bg-amber-100 text-amber-950 border-amber-300 font-semibold gap-2 shadow-xs transition-colors"
           >
             <Tag className="h-4 w-4 text-amber-700" />
-            <span className="hidden sm:inline">Consultar Precio</span>
+            <span className="hidden sm:inline">{t('header.priceCheck')}</span>
             <kbd className="px-1.5 py-0.5 text-[10px] font-black bg-amber-200 text-amber-900 rounded border border-amber-400">
               F3
             </kbd>
@@ -101,27 +104,30 @@ export default function Header({ onOpenPriceCheck }: HeaderProps) {
           variant="outline"
           size="sm"
           onClick={openMenu}
-          aria-label="Abrir panel de opciones de accesibilidad (Alt + A)"
+          aria-label={`${t('header.accessibility')} (Alt + A)`}
           className="bg-blue-50/70 hover:bg-blue-100 text-blue-950 border-blue-200 font-semibold gap-2 shadow-xs transition-colors"
-          title="Accesibilidad (Alt + A)"
+          title={`${t('header.accessibility')} (Alt + A)`}
         >
           <Accessibility className="h-4 w-4 text-blue-700" />
-          <span className="hidden md:inline">Accesibilidad</span>
+          <span className="hidden md:inline">{t('header.accessibility')}</span>
           <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-900 rounded border border-blue-300">
             Alt+A
           </kbd>
         </Button>
       </div>
       <div className="flex items-center gap-3">
+        {/* Multilingual Selector Switcher */}
+        <LanguageSwitcher />
+
         <div className="text-right hidden sm:block">
-          <div className="text-xs font-bold text-foreground leading-none">{user?.name || 'Administrador'}</div>
+          <div className="text-xs font-bold text-foreground leading-none">{user?.name || t('header.admin')}</div>
           <div className="text-[10px] text-muted-foreground font-mono mt-0.5">{user?.email || 'admin@ferreteria.local'}</div>
         </div>
         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-primary/10 text-primary border-primary/20">
           {user?.role || 'ADMIN'}
         </span>
         <Button variant="outline" size="sm" onClick={logout} className="text-xs">
-          Cerrar Sesión
+          {t('header.logout')}
         </Button>
       </div>
     </header>

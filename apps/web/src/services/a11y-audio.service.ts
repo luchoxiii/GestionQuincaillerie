@@ -1,15 +1,50 @@
 /**
  * Servicio de Audio y Asistente de Voz para Accesibilidad (WCAG 2.1)
  * Utiliza Web Audio API (síntesis de tonos puros sin archivos externos)
- * y Web Speech API (síntesis de voz en español).
+ * y Web Speech API (síntesis de voz multilingüe: Español, Inglés, Portugués y Francés).
  */
 
 import { formatCurrency } from '@/lib/utils';
+import { t } from '@/i18n';
+import {
+  type SupportedLanguage,
+  SUPPORTED_LANGUAGES,
+  DEFAULT_LANGUAGE,
+  LANGUAGE_STORAGE_KEY,
+} from '@ferreteria/shared';
 
 class A11yAudioService {
   private audioCtx: AudioContext | null = null;
   private isMuted = false;
+  private language: SupportedLanguage = DEFAULT_LANGUAGE;
   private activeTimers: ReturnType<typeof setTimeout>[] = [];
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+        if (stored && ['es', 'en', 'pt', 'fr'].includes(stored)) {
+          this.language = stored as SupportedLanguage;
+        }
+      } catch {}
+
+      window.addEventListener('language-changed', (e: any) => {
+        if (e.detail?.language && ['es', 'en', 'pt', 'fr'].includes(e.detail.language)) {
+          this.language = e.detail.language;
+        }
+      });
+    }
+  }
+
+  setLanguage(lang: SupportedLanguage) {
+    if (['es', 'en', 'pt', 'fr'].includes(lang)) {
+      this.language = lang;
+    }
+  }
+
+  getLanguage(): SupportedLanguage {
+    return this.language;
+  }
 
   private clearActiveTimers() {
     this.activeTimers.forEach((t) => clearTimeout(t));
@@ -127,7 +162,7 @@ class A11yAudioService {
   }
 
   /**
-   * Asistente de Voz: Síntesis de voz en español
+   * Asistente de Voz: Síntesis de voz multilingüe (Español, Inglés, Portugués, Francés)
    */
   speak(text: string, force = false): Promise<void> {
     return new Promise((resolve) => {
@@ -142,18 +177,19 @@ class A11yAudioService {
         }
 
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'es-ES';
+        const langConfig = SUPPORTED_LANGUAGES.find((l) => l.code === this.language) || SUPPORTED_LANGUAGES[0];
+        utterance.lang = langConfig.speechLocale;
         utterance.rate = 1.05; // Velocidad ligeramente ágil para mostrador
         utterance.pitch = 1.0;
 
-        // Intentar seleccionar una voz natural en español si está disponible
+        // Intentar seleccionar una voz natural en el idioma activo
         const voices = window.speechSynthesis.getVoices();
-        const spanishVoice = voices.find(
-          (v) => v.lang.startsWith('es') && !v.name.includes('Google')
-        ) || voices.find((v) => v.lang.startsWith('es'));
+        const matchedVoice = voices.find(
+          (v) => v.lang.startsWith(this.language) && !v.name.includes('Google')
+        ) || voices.find((v) => v.lang.startsWith(this.language));
 
-        if (spanishVoice) {
-          utterance.voice = spanishVoice;
+        if (matchedVoice) {
+          utterance.voice = matchedVoice;
         }
 
         utterance.onend = () => resolve();
@@ -172,9 +208,11 @@ class A11yAudioService {
   speakProduct(name: string, price: number, stock?: number) {
     const formattedPrice = formatCurrency(price);
 
-    let message = `${name}. Precio: ${formattedPrice}.`;
+    let message = '';
     if (stock !== undefined) {
-      message += ` Stock disponible: ${stock} unidades.`;
+      message = t('voice.productAnnouncement', { name, price: formattedPrice, stock });
+    } else {
+      message = t('voice.productAnnouncementNoStock', { name, price: formattedPrice });
     }
     this.speak(message, true);
   }
@@ -185,10 +223,10 @@ class A11yAudioService {
   speakSaleComplete(total: number, change = 0) {
     const totalStr = formatCurrency(total);
 
-    let msg = `Venta cobrada con éxito. Total: ${totalStr}.`;
+    let msg = t('voice.saleComplete', { total: totalStr });
     if (change > 0) {
       const changeStr = formatCurrency(change);
-      msg += ` Vuelto a entregar: ${changeStr}.`;
+      msg += t('voice.changeAnnouncement', { change: changeStr });
     }
     this.speak(msg, true);
   }

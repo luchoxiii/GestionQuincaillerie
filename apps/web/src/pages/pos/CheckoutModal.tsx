@@ -18,6 +18,7 @@ import { useAccessibilityStore } from '../../stores/accessibility.store';
 import { a11yAudio } from '../../services/a11y-audio.service';
 import { useCommercialPolicies } from '../../services/settings.service';
 import { sendSaleReceiptEmail } from '../../services/email-notification.service';
+import { useI18n } from '../../i18n';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ interface CheckoutModalProps {
 }
 
 export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps) {
+  const { t } = useI18n();
   const {
     getSubtotal,
     getTotalDiscount,
@@ -303,7 +305,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl">Cobrar Venta</DialogTitle>
+          <DialogTitle className="text-xl">{t('checkoutModal.title')}</DialogTitle>
         </DialogHeader>
         <div className="py-2 space-y-4">
           {activeQuoteId && (
@@ -323,7 +325,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
           {selectedCustomer?.isBanned && (
             <div className="p-3 bg-red-50 border border-red-300 text-red-800 rounded-lg text-sm">
               <div className="font-bold flex items-center gap-1.5 text-red-700">
-                <Ban className="h-4 w-4" /> VENTA BLOQUEADA: CLIENTE VETADO
+                <Ban className="h-4 w-4" /> {t('checkoutModal.bannedAlert')}
               </div>
               <p className="mt-1 text-xs text-red-600">
                 El cliente <strong>{selectedCustomer.name}</strong> está inhabilitado por la administración central.
@@ -335,7 +337,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
           {/* Tarjeta de Total a Cobrar con Desglose */}
           <div className="p-4 bg-slate-50 dark:bg-slate-900/60 border rounded-xl space-y-2">
             <div className="flex justify-between items-center text-xs text-muted-foreground">
-              <span>Subtotal artículos:</span>
+              <span>{t('common.subtotal')}:</span>
               <strong className="text-foreground">${rawSubtotal.toFixed(2)}</strong>
             </div>
 
@@ -357,18 +359,18 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
 
             {fiscalType === 'BLANCO' && (
               <div className="flex justify-between items-center text-xs text-muted-foreground">
-                <span>IVA (21% AFIP):</span>
+                <span>{t('common.tax')}:</span>
                 <strong className="text-foreground">${tax.toFixed(2)}</strong>
               </div>
             )}
 
             <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between items-end">
               <div>
-                <span className="text-xs uppercase font-bold text-muted-foreground tracking-wider">Total a Cobrar</span>
+                <span className="text-xs uppercase font-bold text-muted-foreground tracking-wider">{t('pos.totalToPay')}</span>
                 <div className="text-3xl font-extrabold text-foreground tracking-tight">${total.toFixed(2)}</div>
               </div>
               <div className="text-right">
-                <span className="text-xs text-muted-foreground block">Restante:</span>
+                <span className="text-xs text-muted-foreground block">{t('checkoutModal.remaining')}:</span>
                 <strong className={`text-base font-bold ${remaining > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                   ${remaining.toFixed(2)}
                 </strong>
@@ -379,7 +381,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
           {/* Selector de Régimen Fiscal (Blanco vs Negro) */}
           <div className="space-y-2 p-3 border rounded-lg bg-card">
             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              Modalidad de Facturación / Impuestos
+              {t('checkoutModal.regime')}
             </Label>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -396,7 +398,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
                 }`}
               >
                 <span className="flex items-center gap-1.5 font-bold text-blue-800 dark:text-blue-400">
-                  🏛️ Factura Oficial AFIP (Blanco)
+                  🏛️ {t('checkoutModal.regimeOfficial')}
                 </span>
                 <span className="text-[11px] text-muted-foreground mt-1">
                   Factura {isCuit ? 'A' : 'B'} con CAE oficial. Se declara al contador en Libro IVA.
@@ -417,7 +419,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
                 }`}
               >
                 <span className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-400">
-                  📋 Ticket X / Remito (Negro)
+                  📋 {t('checkoutModal.regimeInternal')}
                 </span>
                 <span className="text-[11px] text-muted-foreground mt-1">
                   Comprobante interno sin CAE. Suma a caja física, NO se envía al contador.
@@ -436,7 +438,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
                   </div>
                   <div>
                     <Label htmlFor="black-cash-discount-toggle" className="text-xs font-bold text-amber-950 block">
-                      Descuento por Pago en Efectivo (Facturación en Negro)
+                      {t('checkoutModal.cashDiscount')}
                     </Label>
                     <span className="text-[11px] text-amber-800">
                       Beneficio especial de mostrador al cobrar sin costo impositivo ni comisiones.
@@ -493,7 +495,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
                 </div>
                 <div>
                   <Label htmlFor="send-email-toggle" className="text-xs font-bold text-blue-950 block">
-                    Enviar comprobante por email al cliente
+                    {t('checkoutModal.emailReceipt')}
                   </Label>
                   <span className="text-[11px] text-blue-800">
                     Despacha el detalle de compra y ticket digital a la casilla del comprador.
@@ -554,7 +556,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
 
             <div className="flex gap-2 items-end">
               <div className="flex-1">
-                <Label>Medio de Pago</Label>
+                <Label>{t('checkoutModal.paymentMethod')}</Label>
                 <Select
                   value={selectedMethodId}
                   onValueChange={(val) => {
@@ -577,7 +579,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
                 </Select>
               </div>
               <div className="flex-1">
-                <Label>Monto (Paga con)</Label>
+                <Label>{t('checkoutModal.tendered')}</Label>
                 <Input
                   type="number"
                   value={tendered}
@@ -599,14 +601,14 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
                 className="shrink-0 gap-1"
               >
                 <Plus className="h-4 w-4" />
-                Agregar Pago
+                {t('checkoutModal.addPayment')}
               </Button>
             </div>
           </div>
 
           {payments.length > 0 && (
             <div>
-              <Label className="text-xs text-muted-foreground font-semibold">Pagos registrados:</Label>
+              <Label className="text-xs text-muted-foreground font-semibold">{t('checkoutModal.paymentsAdded')}:</Label>
               <ul className="mt-1.5 text-sm border rounded-lg divide-y bg-card">
                 {payments.map((p, idx) => {
                   const m = paymentMethods?.find((x) => x.id === p.methodId);
@@ -635,7 +637,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
 
           {change > 0 && (
             <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 font-bold text-sm flex justify-between">
-              <span>Vuelto a entregar:</span>
+              <span>{t('checkoutModal.change')}:</span>
               <span className="text-base">${change.toFixed(2)}</span>
             </div>
           )}
@@ -643,7 +645,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
 
         <div className="flex justify-end gap-2 pt-2 border-t">
           <Button variant="outline" onClick={onClose}>
-            Cancelar
+            {t('common.cancel')}
           </Button>
           <Button
             onClick={handleConfirm}
@@ -656,10 +658,10 @@ export function CheckoutModal({ isOpen, onClose, onSuccess }: CheckoutModalProps
             className={fiscalType === 'BLANCO' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-700'}
           >
             {selectedCustomer?.isBanned
-              ? 'Cliente Vetado (Bloqueado)'
+              ? t('checkoutModal.bannedAlert')
               : fiscalType === 'BLANCO'
-              ? `Confirmar (Factura ${suggestedLetter} AFIP)`
-              : 'Confirmar (Ticket X Interno)'}
+              ? `${t('checkoutModal.confirmSale')} (AFIP ${suggestedLetter})`
+              : `${t('checkoutModal.confirmSale')} (Ticket X)`}
           </Button>
         </div>
       </DialogContent>

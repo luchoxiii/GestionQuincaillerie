@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useAuthStore, AuthUser } from '@/stores/auth.store';
+import { useI18n } from '@/i18n';
+import LanguageSwitcher from '@/components/layout/LanguageSwitcher';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -74,6 +76,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const login = useAuthStore((state) => state.login);
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,19 +218,22 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-muted/40 p-4">
+    <div className="flex h-screen w-full items-center justify-center bg-muted/40 p-4 relative">
+      <div className="absolute top-4 right-4">
+        <LanguageSwitcher />
+      </div>
       <Card className="w-full max-w-md shadow-xl border-border">
         <CardHeader className="space-y-1 text-center">
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary font-black text-2xl">
             F
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">Ferretería ERP</CardTitle>
-          <CardDescription>Sistema Integral de Gestión de Ferretería y Corralón</CardDescription>
+          <CardDescription>{t('auth.welcomeBack')}</CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="username">Usuario</Label>
+              <Label htmlFor="username">{t('auth.username')}</Label>
               <Input
                 id="username"
                 placeholder="admin"
@@ -238,7 +244,7 @@ export default function LoginPage() {
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password">Contraseña</Label>
+                <Label htmlFor="password">{t('auth.password')}</Label>
                 <span className="text-xs text-muted-foreground">Default: admin123</span>
               </div>
               <Input
@@ -258,7 +264,7 @@ export default function LoginPage() {
           </CardContent>
           <CardFooter>
             <Button className="w-full" type="submit" disabled={isLoading}>
-              {isLoading ? 'Iniciando...' : 'Iniciar Sesión'}
+              {isLoading ? t('auth.loggingIn') : t('auth.signIn')}
             </Button>
           </CardFooter>
         </form>

@@ -19,9 +19,11 @@ import type { Sale } from '@ferreteria/shared';
 import { useAccessibilityStore } from '../../stores/accessibility.store';
 import { a11yAudio } from '../../services/a11y-audio.service';
 import { formatCurrency } from '@/lib/utils';
+import { useI18n } from '../../i18n';
 
 
 export function PosPage() {
+  const { t } = useI18n();
   const [searchParams] = useSearchParams();
   const couponQuery = searchParams.get('coupon');
   const customerIdQuery = searchParams.get('customerId');
@@ -70,7 +72,7 @@ export function PosPage() {
     const stockVal = Number(product.stock ?? product.totalStock ?? 0);
     const existingQty = cart.find((i) => i.product.id === product.id)?.quantity || 0;
     if (stockVal <= 0 || existingQty >= stockVal) {
-      toast.error('Sin stock disponible');
+      toast.error(t('pos.outOfStock'));
       return false;
     }
     const taxRate = Number(product.taxRate ?? product.taxes?.[0]?.tax?.rate ?? 21);
@@ -210,7 +212,7 @@ export function PosPage() {
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
             <Input 
               id="quick-search"
-              placeholder="Buscar producto en lenguaje natural (F2)..." 
+              placeholder={t('pos.searchPlaceholder')} 
               className="pl-8"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -223,14 +225,14 @@ export function PosPage() {
             className="bg-amber-50 hover:bg-amber-100 text-amber-950 border-amber-300 font-semibold gap-1.5 shrink-0 shadow-xs"
           >
             <Tag className="h-4 w-4 text-amber-700" />
-            <span className="hidden sm:inline">Consultar Precio</span>
+            <span className="hidden sm:inline">{t('header.priceCheck')}</span>
             <kbd className="px-1.5 py-0.5 text-[10px] font-black bg-amber-200 text-amber-900 rounded border border-amber-400">
               F3
             </kbd>
           </Button>
           <div className="flex gap-2 overflow-x-auto pb-1 max-w-md">
             <Button size="sm" variant={categoryFilter === null ? 'default' : 'outline'} onClick={() => setCategoryFilter(null)}>
-              Todo
+              {t('common.all')}
             </Button>
             {categories.map((cat: any) => (
               <Button
@@ -264,7 +266,7 @@ export function PosPage() {
                   <div className="flex justify-between items-center mt-2">
                     <span className="font-bold text-lg">${productPrice.toFixed(2)}</span>
                     <Badge variant={stockVal <= 0 ? 'destructive' : 'secondary'}>
-                      {stockVal <= 0 ? 'Sin stock' : `Stock: ${stockVal}`}
+                      {stockVal <= 0 ? t('pos.outOfStock') : `${t('pos.inStock')}: ${stockVal}`}
                     </Badge>
                   </div>
                 </CardContent>
@@ -273,7 +275,7 @@ export function PosPage() {
           })}
           {products.length === 0 && (
             <div className="col-span-full text-center py-10 text-gray-500">
-              No hay productos para mostrar.
+              {t('priceCheck.noProductFound')}
             </div>
           )}
         </div>
@@ -283,7 +285,7 @@ export function PosPage() {
       <div className="w-[400px] bg-white border-l shadow-lg flex flex-col z-10">
         <div className="p-4 border-b bg-gray-50 flex flex-col gap-3">
           <h2 className="text-lg font-bold flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5" /> Ticket de Venta
+            <ShoppingCart className="w-5 h-5" /> {t('pos.cartTitle')}
           </h2>
 
           {activeQuoteNumber && (
@@ -309,10 +311,10 @@ export function PosPage() {
               }}
             >
               <SelectTrigger className="w-full bg-white">
-                <SelectValue placeholder="Seleccionar Cliente..." />
+                <SelectValue placeholder={t('checkoutModal.selectCustomer')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="consumidor_final">Consumidor Final</SelectItem>
+                <SelectItem value="consumidor_final">{t('checkoutModal.finalConsumer')}</SelectItem>
                 {customers.map(c => (
                   <SelectItem key={c.id} value={c.id} className={c.isBanned ? "text-destructive font-medium" : ""}>
                     {c.name} {c.isBanned ? '🚫 [VETADO]' : ''}
@@ -360,7 +362,7 @@ export function PosPage() {
         <div className="flex-1 overflow-y-auto p-4">
           {cart.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-400">
-              El carrito está vacío
+              {t('pos.emptyCart')}
             </div>
           ) : (
             <ul className="space-y-3">
@@ -388,7 +390,7 @@ export function PosPage() {
                         disabled={item.quantity >= maxStock}
                         onClick={() => {
                           if (item.quantity >= maxStock) {
-                            toast.error('Sin stock disponible');
+                            toast.error(t('pos.outOfStock'));
                             return;
                           }
                           updateQuantity(item.product.id, item.quantity + 1);
@@ -446,7 +448,7 @@ export function PosPage() {
               <div className="space-y-1.5">
                 <div className="flex gap-1.5">
                   <Input
-                    placeholder="Código de cupón..."
+                    placeholder={t('pos.couponPlaceholder')}
                     value={couponInput}
                     onChange={(e) => setCouponInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -465,7 +467,7 @@ export function PosPage() {
                     onClick={() => handleApplyCoupon()}
                     disabled={cart.length === 0}
                   >
-                    Aplicar
+                    {t('pos.applyCoupon')}
                   </Button>
                 </div>
                 {suggestedCoupon && (
@@ -488,30 +490,30 @@ export function PosPage() {
 
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">Subtotal:</span>
+              <span className="text-gray-600">{t('common.subtotal')}:</span>
               <span>${getSubtotal().toFixed(2)}</span>
             </div>
             {getTotalDiscount() > 0 && (
               <div className="flex justify-between text-emerald-600 font-medium">
                 <span className="flex items-center gap-1">
-                  <Tag className="w-3.5 h-3.5" /> Descuento Cupón:
+                  <Tag className="w-3.5 h-3.5" /> {t('common.discount')}:
                 </span>
                 <span>-${getTotalDiscount().toFixed(2)}</span>
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-gray-600">IVA:</span>
+              <span className="text-gray-600">{t('common.tax')}:</span>
               <span>${getTotalTax().toFixed(2)}</span>
             </div>
             <div className="flex justify-between font-bold text-2xl mt-2 border-t pt-2">
-              <span>Total:</span>
+              <span>{t('common.total')}:</span>
               <span>${getTotal().toFixed(2)}</span>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" className="w-full text-red-600 hover:text-red-700" onClick={clearCart}>
-              Cancelar (Esc)
+              {t('common.cancel')} (Esc)
             </Button>
             <Button
               className="w-full"
@@ -525,7 +527,7 @@ export function PosPage() {
                 setIsCheckoutOpen(true);
               }}
             >
-              {selectedCustomer?.isBanned ? 'Cliente Vetado' : 'Cobrar (F4)'}
+              {selectedCustomer?.isBanned ? t('checkoutModal.bannedAlert') : `${t('pos.checkout')} (F4)`}
             </Button>
           </div>
         </div>

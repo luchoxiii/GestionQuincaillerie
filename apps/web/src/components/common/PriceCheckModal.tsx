@@ -9,6 +9,7 @@ import { Barcode, ShoppingCart, Tag, AlertCircle, CheckCircle2, Package, Layers,
 import toast from 'react-hot-toast';
 import { useAccessibilityStore } from '@/stores/accessibility.store';
 import { a11yAudio } from '@/services/a11y-audio.service';
+import { useI18n } from '@/i18n';
 
 interface PriceCheckModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { addItem } = usePosStore();
+  const { t } = useI18n();
 
   const { data: productsData, isLoading } = useProducts({
     search: query,
@@ -129,13 +131,13 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
               </div>
               <div>
                 <DialogTitle className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                  Verificador de Precios y Stock
+                  {t('priceCheck.title')}
                   <span className="text-xs bg-amber-500 text-slate-950 font-black px-2 py-0.5 rounded uppercase tracking-wider">
                     F3
                   </span>
                 </DialogTitle>
                 <p className="text-xs text-slate-300 mt-0.5">
-                  Escanee el código de barras con la lectora USB o escriba el nombre/SKU
+                  {t('priceCheck.subtitle')}
                 </p>
               </div>
             </div>
@@ -205,7 +207,7 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
                       aria-label="Escuchar precio y stock en voz alta"
                     >
                       <Volume2 className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Escuchar</span>
+                      <span className="hidden sm:inline">{t('priceCheck.listen')}</span>
                     </Button>
                   </div>
 
@@ -220,7 +222,7 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
                   <span className="text-xs font-medium text-slate-500">Disponibilidad</span>
                   {stock <= 0 ? (
                     <Badge variant="destructive" className="flex items-center gap-1 font-bold">
-                      <AlertCircle className="h-3.5 w-3.5" /> Sin Stock
+                      <AlertCircle className="h-3.5 w-3.5" /> {t('pos.outOfStock')}
                     </Badge>
                   ) : stock <= minStock ? (
                     <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-300 font-bold flex items-center gap-1">
@@ -228,7 +230,7 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
                     </Badge>
                   ) : (
                     <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold flex items-center gap-1">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> En Stock: {stock} un.
+                      <CheckCircle2 className="h-3.5 w-3.5" /> {t('pos.inStock')}: {stock} un.
                     </Badge>
                   )}
                 </div>
@@ -252,7 +254,7 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
                     </div>
                   </div>
                   <div className="pt-2 border-t border-blue-800/80 flex items-center justify-between text-xs text-blue-200">
-                    <span>Efectivo / Débito (10% OFF):</span>
+                    <span>{t('priceCheck.cashDiscount')}:</span>
                     <strong className="text-emerald-400 font-bold text-sm">
                       ${cashDiscountPrice.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </strong>
@@ -262,17 +264,17 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
                 {/* Installments Card */}
                 <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col justify-between space-y-3">
                   <span className="text-xs uppercase font-bold text-slate-500 tracking-wider flex items-center gap-1">
-                    <Layers className="h-3.5 w-3.5 text-blue-600" /> Financiación
+                    <Layers className="h-3.5 w-3.5 text-blue-600" /> {t('priceCheck.installments')}
                   </span>
                   <div className="space-y-2 text-xs">
                     <div className="p-2 rounded bg-slate-50 border border-slate-100">
-                      <div className="font-semibold text-slate-800">3 cuotas sin interés</div>
+                      <div className="font-semibold text-slate-800">{t('priceCheck.installments3')}</div>
                       <div className="text-blue-600 font-bold text-sm">
                         ${cuota3.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / mes
                       </div>
                     </div>
                     <div className="p-2 rounded bg-slate-50 border border-slate-100">
-                      <div className="text-slate-600">6 cuotas fijas (+15%)</div>
+                      <div className="text-slate-600">{t('priceCheck.installments6')}</div>
                       <div className="text-slate-900 font-semibold">
                         ${cuota6.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / mes
                       </div>
@@ -284,7 +286,7 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
               {/* Warehouses & Locations Breakdown */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
                 <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                  <Package className="h-4 w-4 text-slate-500" /> Stock por Ubicación Física
+                  <Package className="h-4 w-4 text-slate-500" /> {t('priceCheck.stockLocations')}
                 </span>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                   <div className="p-2.5 bg-white border rounded-lg">
@@ -311,18 +313,18 @@ export function PriceCheckModal({ isOpen, onClose, onAddToCart }: PriceCheckModa
               {/* Actions */}
               <div className="flex justify-between items-center pt-2">
                 <Button variant="ghost" size="sm" onClick={handleResetSearch} className="text-xs text-slate-600">
-                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> Consultar Otro Producto
+                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> {t('common.search')}
                 </Button>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={onClose}>
-                    Cerrar
+                    {t('common.close')}
                   </Button>
                   <Button
                     onClick={handleAddToCart}
                     disabled={stock <= 0}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5"
                   >
-                    <ShoppingCart className="h-4 w-4" /> Cargar al Carrito (POS)
+                    <ShoppingCart className="h-4 w-4" /> {t('priceCheck.addToCart')}
                   </Button>
                 </div>
               </div>
