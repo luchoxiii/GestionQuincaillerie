@@ -19,7 +19,8 @@
 
 > **Sistema Integral de Gestión Comercial, Control de Stock Multidepósito, Facturación Dual AFIP, Terminal de Punto de Venta (POS) de Alta Velocidad y Sincronización Omnicanal para Ferreterías, Corralones y Distribuidores de Materiales.**  
 > Repositorio oficial: [https://github.com/luchoxiii/GestionQuincaillerie](https://github.com/luchoxiii/GestionQuincaillerie)  
-> 🌐 **Documentación:** [Español (README.md)](./README.md) • [English (README.en.md)](./README.en.md) • [Português (README.pt.md)](./README.pt.md) • [Français (README.fr.md)](./README.fr.md) • [📋 Auditoría Técnica & OWASP (AUDIT_REPORT.md)](./AUDIT_REPORT.md)
+> 🌐 **Languages / Idiomas / Langues:** [🇪🇸 Español](./README.md) • [🇺🇸 English](./README.en.md) • [🇧🇷 Português](./README.pt.md) • [🇫🇷 Français](./README.fr.md)  
+> 📋 **Audit & Security Reports / Informes Técnicos:** [🇪🇸 Español (AUDIT_REPORT.md)](./AUDIT_REPORT.md) • [🇺🇸 English (AUDIT_REPORT.en.md)](./AUDIT_REPORT.en.md) • [🇧🇷 Português (AUDIT_REPORT.pt.md)](./AUDIT_REPORT.pt.md) • [🇫🇷 Français (AUDIT_REPORT.fr.md)](./AUDIT_REPORT.fr.md)
 
 ---
 

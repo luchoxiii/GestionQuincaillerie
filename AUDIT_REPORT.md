@@ -1,5 +1,10 @@
 # 📋 Informe Técnico Exhaustivo de Auditoría, Diagnóstico y Reparación Integral
 
+> 🌐 **Languages / Idiomas / Langues:** [🇪🇸 Español](./AUDIT_REPORT.md) • [🇺🇸 English](./AUDIT_REPORT.en.md) • [🇧🇷 Português](./AUDIT_REPORT.pt.md) • [🇫🇷 Français](./AUDIT_REPORT.fr.md)  
+> 📖 **General Documentation / Documentación General:** [🇪🇸 Español (README.md)](./README.md) • [🇺🇸 English (README.en.md)](./README.en.md) • [🇧🇷 Português (README.pt.md)](./README.pt.md) • [🇫🇷 Français (README.fr.md)](./README.fr.md)
+
+---
+
 **Proyecto:** `GestionQuincaillerie` (Ferretería & Corralón ERP + POS)  
 **Directorio:** `D:\TPs Univerty\GestionQuincaillerie-main`  
 **Arquitectura:** Monorepo `pnpm` (`@ferreteria/shared`, `@ferreteria/api`, `@ferreteria/web`)  
